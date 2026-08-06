@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Loader2, Zap, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Zap, SlidersHorizontal, Route } from 'lucide-react';
 import type { TripInput } from '@haulwise/api-client-react';
 
 const formSchema = z.object({
@@ -22,27 +22,62 @@ type FormValues = z.infer<typeof formSchema>;
 interface PlannerFormProps {
   onSubmit: (data: TripInput) => void;
   isLoading: boolean;
+  initialValues?: Partial<FormValues>;
 }
 
-export default function PlannerForm({ onSubmit, isLoading }: PlannerFormProps) {
+const PRESET_CORRIDORS = [
+  { label: 'Chicago → Dallas', current: 'Chicago, IL', pickup: 'St. Louis, MO', dropoff: 'Dallas, TX' },
+  { label: 'Atlanta → Miami', current: 'Atlanta, GA', pickup: 'Jacksonville, FL', dropoff: 'Miami, FL' },
+  { label: 'LA → Denver', current: 'Los Angeles, CA', pickup: 'Phoenix, AZ', dropoff: 'Denver, CO' },
+  { label: 'NY → Nashville', current: 'New York, NY', pickup: 'Philadelphia, PA', dropoff: 'Nashville, TN' },
+  { label: 'Seattle → Denver', current: 'Seattle, WA', pickup: 'Portland, OR', dropoff: 'Denver, CO' },
+];
+
+export default function PlannerForm({ onSubmit, isLoading, initialValues }: PlannerFormProps) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      current_location: '',
-      pickup_location: '',
-      dropoff_location: '',
-      current_cycle_used: 0,
+      current_location: initialValues?.current_location ?? '',
+      pickup_location: initialValues?.pickup_location ?? '',
+      dropoff_location: initialValues?.dropoff_location ?? '',
+      current_cycle_used: initialValues?.current_cycle_used ?? 0,
     },
   });
 
+  const fillPreset = (preset: typeof PRESET_CORRIDORS[0]) => {
+    form.setValue('current_location', preset.current, { shouldValidate: true });
+    form.setValue('pickup_location', preset.pickup, { shouldValidate: true });
+    form.setValue('dropoff_location', preset.dropoff, { shouldValidate: true });
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-950/80 backdrop-blur-xl border-r border-white/[0.08] p-6 shadow-2xl z-10 relative overflow-y-auto">
-      <div className="mb-6">
+      <div className="mb-5">
         <h2 className="text-xl font-extrabold font-sans tracking-tight mb-1 text-white flex items-center gap-2">
           <SlidersHorizontal className="w-5 h-5 text-blue-400" />
           Trip Parameters
         </h2>
         <p className="text-xs text-slate-400">Enter location coordinates and HOS cycle status</p>
+      </div>
+
+      {/* Preset Corridors */}
+      <div className="mb-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
+          <Route className="w-3.5 h-3.5" />
+          Quick Presets
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {PRESET_CORRIDORS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => fillPreset(preset)}
+              className="px-2.5 py-1 text-xs font-mono rounded border border-white/10 bg-slate-900/60 text-sky-300 hover:bg-sky-500/10 hover:border-sky-400/40 transition-all cursor-pointer"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Form {...form}>
