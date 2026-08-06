@@ -1,5 +1,6 @@
 import math
 import requests
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple, Any
 
 # Fallback geocoding dictionary for key US freight hubs
@@ -81,8 +82,6 @@ def get_osrm_route(coords: List[Tuple[float, float]]) -> Dict[str, Any]:
     
     # 55 MPH average commercial speed
     duration_hours = total_dist / 55.0
-    
-    # Generate simple line geometry
     geometry = [[lon, lat] for lat, lon in coords]
     return {
         'distance_miles': total_dist,
@@ -103,84 +102,98 @@ def calculate_trip_plan(
     route_res = get_osrm_route([(c_lat, c_lng), (p_lat, p_lng), (d_lat, d_lng)])
     total_miles = route_res['distance_miles']
     
-    # Commercial driving logic (55 MPH average speed)
     avg_speed = 55.0
     driving_hours_total = total_miles / avg_speed if total_miles > 0 else 0.0
+    
+    now = datetime.now(timezone.utc)
+    start_iso = now.isoformat()
     
     stops = []
     daily_logs = []
     
-    # Initial Pickup Stop
+    # 1. Current Location Stop
     stops.append({
-        'name': f"Pickup: {pickup_loc}",
-        'type': 'pickup',
-        'location': {'lat': p_lat, 'lng': p_lng},
-        'mileage': round(haversine_distance(c_lat, c_lng, p_lat, p_lng), 1),
-        'duration_minutes': 60,
-        'note': 'Load cargo & inspect trailer'
-    })
-
-    # HOS Calculation
-    accumulated_miles = 0.0
-    accumulated_drive_hrs = 0.0
-    miles_since_fuel = 0.0
-    day_num = 1
-    current_time_hr = 8.0 # Start at 08:00 AM
-
-    current_day_segments = []
-    current_day_drive_hrs = 0.0
-
-    # Add initial morning inspection / pickup
-    current_day_segments.append({
-        'status': 'ON_DUTY_NOT_DRIVING',
-        'duration_hours': 1.0,
-        'start_hour': 8.0,
-        'end_hour': 9.0,
+        'type': 'current',
         'location': current_loc,
-        'remarks': 'Pre-trip inspection & pickup loading'
+        'coordinates': {'lat': c_lat, 'lng': c_lng},
+        'arrivalTime': start_iso,
+        'duration': 0.0,
+        'distanceFromStart': 0.0,
     })
+
+    # 2. Pickup Stop
+    pickup_dist = haversine_distance(c_lat, c_lng, p_lat, p_lng)
+    pickup_arr = (now + timedelta(hours=pickup_dist / avg_speed)).isoformat()
+    stops.append({
+        'type': 'pickup',
+        'location': pickup_loc,
+        'coordinates': {'lat': p_lat, 'lng': p_lng},
+        'arrivalTime': pickup_arr,
+        'duration': 1.0,
+        'distanceFromStart': round(pickup_dist, 1),
+    })
+
+    accumulated_miles = pickup_dist
+    accumulated_drive_hrs = pickup_dist / avg_speed
+    miles_since_fuel = pickup_dist
+    day_num = 1
+    current_time_hr = 8.0 # 08:00 AM
+
+    current_day_segments = [
+        {
+            'startHour': 8.0,
+            'endHour': 9.0,
+            'status': 'on_duty'
+        }
+    ]
+    current_day_drive_hrs = 0.0
     current_time_hr = 9.0
 
-    remaining_drive = driving_hours_total
-    
+    remaining_drive = driving_hours_total - (pickup_dist / avg_speed if pickup_dist / avg_speed < driving_hours_total else 0)
+    if remaining_drive < 0:
+        remaining_drive = driving_hours_total
+
+    fuel_count = 0
+    rest_count = 0
+
     while remaining_drive > 0:
-        # Drive chunk up to 8h before mandatory break or remaining
         drive_chunk = min(remaining_drive, 8.0, 11.0 - current_day_drive_hrs)
         if drive_chunk <= 0:
-            # Need 10h rest break
+            rest_count += 1
+            rest_mileage = round(accumulated_miles, 1)
             stops.append({
-                'name': f"10h Mandatory Rest Stop (Day {day_num})",
                 'type': 'rest',
-                'location': {'lat': c_lat + (p_lat - c_lat)*0.5, 'lng': c_lng + (p_lng - c_lng)*0.5},
-                'mileage': round(accumulated_miles, 1),
-                'duration_minutes': 600,
-                'note': 'FMCSA 10-hour off-duty rest period'
+                'location': f"Mandatory Rest Stop #{rest_count}",
+                'coordinates': {'lat': c_lat + (p_lat - c_lat)*0.5, 'lng': c_lng + (p_lng - c_lng)*0.5},
+                'arrivalTime': (now + timedelta(hours=accumulated_drive_hrs)).isoformat(),
+                'duration': 10.0,
+                'distanceFromStart': rest_mileage,
             })
             
-            # Close day log
             current_day_segments.append({
-                'status': 'OFF_DUTY',
-                'duration_hours': 24.0 - current_time_hr,
-                'start_hour': current_time_hr,
-                'end_hour': 24.0,
-                'location': 'Rest Haven Truck Stop',
-                'remarks': '10-hour mandatory off-duty rest'
+                'startHour': current_time_hr,
+                'endHour': 24.0,
+                'status': 'off_duty'
             })
+            
+            day_date = (now + timedelta(days=day_num - 1)).strftime('%Y-%m-%d')
             daily_logs.append({
-                'day_number': day_num,
-                'date': f"Day {day_num}",
-                'total_miles': round(current_day_drive_hrs * avg_speed, 1),
-                'total_drive_hours': round(current_day_drive_hrs, 1),
-                'segments': current_day_segments
+                'date': day_date,
+                'dayNumber': day_num,
+                'segments': current_day_segments,
+                'totalOffDuty': round(24.0 - current_day_drive_hrs - 1.0, 1),
+                'totalSleeperBerth': 0.0,
+                'totalDriving': round(current_day_drive_hrs, 1),
+                'totalOnDuty': 1.0,
+                'remarks': [f"Day {day_num} driving completed ({round(current_day_drive_hrs * avg_speed, 1)} miles)"]
             })
             
             day_num += 1
-            current_time_hr = 6.0 # Start next day at 06:00 AM
+            current_time_hr = 6.0
             current_day_drive_hrs = 0.0
             current_day_segments = []
             continue
 
-        # Execute drive chunk
         start_t = current_time_hr
         current_time_hr += drive_chunk
         current_day_drive_hrs += drive_chunk
@@ -191,110 +204,98 @@ def calculate_trip_plan(
         remaining_drive -= drive_chunk
 
         current_day_segments.append({
-            'status': 'DRIVING',
-            'duration_hours': round(drive_chunk, 1),
-            'start_hour': round(start_t, 1),
-            'end_hour': round(current_time_hr, 1),
-            'location': 'Interstate Transit',
-            'remarks': f"Driving towards {dropoff_loc}"
+            'startHour': round(start_t, 1),
+            'endHour': round(current_time_hr, 1),
+            'status': 'driving'
         })
 
-        # Fuel check every 1000 mi
         if miles_since_fuel >= 900 and remaining_drive > 0:
             miles_since_fuel = 0.0
+            fuel_count += 1
             stops.append({
-                'name': 'Fuel & Inspection Break',
                 'type': 'fuel',
-                'location': {'lat': p_lat + (d_lat - p_lat)*0.4, 'lng': p_lng + (d_lng - p_lng)*0.4},
-                'mileage': round(accumulated_miles, 1),
-                'duration_minutes': 45,
-                'note': 'Refuel commercial tractor & 30-min break'
+                'location': f"Fuel & Inspection #{fuel_count}",
+                'coordinates': {'lat': p_lat + (d_lat - p_lat)*0.4, 'lng': p_lng + (d_lng - p_lng)*0.4},
+                'arrivalTime': (now + timedelta(hours=accumulated_drive_hrs)).isoformat(),
+                'duration': 0.75,
+                'distanceFromStart': round(accumulated_miles, 1),
             })
             current_day_segments.append({
-                'status': 'ON_DUTY_NOT_DRIVING',
-                'duration_hours': 0.75,
-                'start_hour': round(current_time_hr, 1),
-                'end_hour': round(current_time_hr + 0.75, 1),
-                'location': 'Loves Travel Stop',
-                'remarks': 'Fueling & 30-min rest break'
+                'startHour': round(current_time_hr, 1),
+                'endHour': round(current_time_hr + 0.75, 1),
+                'status': 'on_duty'
             })
             current_time_hr += 0.75
         elif drive_chunk >= 7.5 and remaining_drive > 0:
-            # 30-minute break
+            rest_count += 1
             stops.append({
-                'name': '30-Minute Mandatory Rest Break',
-                'type': 'rest',
-                'location': {'lat': p_lat + (d_lat - p_lat)*0.6, 'lng': p_lng + (d_lng - p_lng)*0.6},
-                'mileage': round(accumulated_miles, 1),
-                'duration_minutes': 30,
-                'note': '30-minute HOS off-duty break'
+                'type': 'break',
+                'location': '30-Min Mandatory Break',
+                'coordinates': {'lat': p_lat + (d_lat - p_lat)*0.6, 'lng': p_lng + (d_lng - p_lng)*0.6},
+                'arrivalTime': (now + timedelta(hours=accumulated_drive_hrs)).isoformat(),
+                'duration': 0.5,
+                'distanceFromStart': round(accumulated_miles, 1),
             })
             current_day_segments.append({
-                'status': 'OFF_DUTY',
-                'duration_hours': 0.5,
-                'start_hour': round(current_time_hr, 1),
-                'end_hour': round(current_time_hr + 0.5, 1),
-                'location': 'Rest Area',
-                'remarks': 'Mandatory 30-minute rest break'
+                'startHour': round(current_time_hr, 1),
+                'endHour': round(current_time_hr + 0.5, 1),
+                'status': 'off_duty'
             })
             current_time_hr += 0.5
 
-    # Final Dropoff Stop
+    # 3. Dropoff Stop
+    dropoff_arr = (now + timedelta(hours=accumulated_drive_hrs + 1.0)).isoformat()
     stops.append({
-        'name': f"Dropoff: {dropoff_loc}",
         'type': 'dropoff',
-        'location': {'lat': d_lat, 'lng': d_lng},
-        'mileage': round(total_miles, 1),
-        'duration_minutes': 60,
-        'note': 'Unload cargo & post-trip inspection'
+        'location': dropoff_loc,
+        'coordinates': {'lat': d_lat, 'lng': d_lng},
+        'arrivalTime': dropoff_arr,
+        'duration': 1.0,
+        'distanceFromStart': round(total_miles, 1),
     })
     
     current_day_segments.append({
-        'status': 'ON_DUTY_NOT_DRIVING',
-        'duration_hours': 1.0,
-        'start_hour': round(current_time_hr, 1),
-        'end_hour': round(current_time_hr + 1.0, 1),
-        'location': dropoff_loc,
-        'remarks': 'Unloading & post-trip inspection'
+        'startHour': round(current_time_hr, 1),
+        'endHour': round(current_time_hr + 1.0, 1),
+        'status': 'on_duty'
     })
     current_time_hr += 1.0
     
-    # Fill remaining day off duty
     if current_time_hr < 24.0:
         current_day_segments.append({
-            'status': 'OFF_DUTY',
-            'duration_hours': round(24.0 - current_time_hr, 1),
-            'start_hour': round(current_time_hr, 1),
-            'end_hour': 24.0,
-            'location': dropoff_loc,
-            'remarks': 'Post-trip off duty'
+            'startHour': round(current_time_hr, 1),
+            'endHour': 24.0,
+            'status': 'off_duty'
         })
 
+    day_date = (now + timedelta(days=day_num - 1)).strftime('%Y-%m-%d')
     daily_logs.append({
-        'day_number': day_num,
-        'date': f"Day {day_num}",
-        'total_miles': round(current_day_drive_hrs * avg_speed, 1),
-        'total_drive_hours': round(current_day_drive_hrs, 1),
-        'segments': current_day_segments
+        'date': day_date,
+        'dayNumber': day_num,
+        'segments': current_day_segments,
+        'totalOffDuty': round(24.0 - current_day_drive_hrs - 1.0, 1),
+        'totalSleeperBerth': 0.0,
+        'totalDriving': round(current_day_drive_hrs, 1),
+        'totalOnDuty': 1.0,
+        'remarks': [f"Trip completed at {dropoff_loc}"]
     })
 
-    # Summary metrics
-    total_duty_hours = driving_hours_total + len(stops) * 0.75
+    total_duty_hours = driving_hours_total + len(stops) * 0.5
     cycle_remaining = max(0.0, 70.0 - (current_cycle_used + total_duty_hours))
+    est_arrival = dropoff_arr
 
     return {
-        'total_distance_miles': round(total_miles, 1),
-        'estimated_driving_hours': round(driving_hours_total, 1),
-        'total_trip_duration_hours': round(total_duty_hours, 1),
-        'cycle_hours_remaining': round(cycle_remaining, 1),
-        'current_cycle_used': current_cycle_used,
-        'hos_compliant': cycle_remaining > 0,
-        'locations': {
-            'current': {'name': current_loc, 'lat': c_lat, 'lng': c_lng},
-            'pickup': {'name': pickup_loc, 'lat': p_lat, 'lng': p_lng},
-            'dropoff': {'name': dropoff_loc, 'lat': d_lat, 'lng': d_lng},
-        },
-        'route_geometry': route_res['geometry'],
+        'totalDistanceMiles': round(total_miles, 1),
+        'totalDrivingHours': round(driving_hours_total, 1),
+        'totalTripHours': round(total_duty_hours, 1),
+        'estimatedArrival': est_arrival,
+        'startTime': start_iso,
+        'remainingCycleHours': round(cycle_remaining, 1),
+        'fuelStopCount': fuel_count,
+        'restStopCount': rest_count,
         'stops': stops,
-        'daily_logs': daily_logs
+        'dailyLogs': daily_logs,
+        'routeGeometry': {
+            'coordinates': route_res['geometry']
+        }
     }

@@ -18,12 +18,19 @@ export default function PlannerPage() {
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = (data: TripInput) => {
+    console.log('[Frontend] Submitting Trip Request Payload:', JSON.stringify(data, null, 2));
+    
     planTrip.mutate({ data }, {
-      onSuccess: (result) => {
-        setTripPlan(result);
+      onSuccess: (result: any) => {
+        console.log('[Frontend] Trip Request Succeeded:', result);
+        const plan: TripPlan = result.trip_plan || result;
+        setTripPlan(plan);
         if (window.innerWidth < 1024 && resultsRef.current) {
           resultsRef.current.scrollIntoView({ behavior: 'smooth' });
         }
+      },
+      onError: (err: any) => {
+        console.error('[Frontend] Trip Request Failed (Error Details):', err);
       }
     });
   };
@@ -67,7 +74,7 @@ export default function PlannerPage() {
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-2">Routing Failed</h3>
                 <p className="text-slate-400 text-sm mb-6">
-                  {((planTrip.error as any)?.response?.data as ApiError)?.error || 'An unexpected error occurred while calculating the route.'}
+                  {((planTrip.error as any)?.data as any)?.message || ((planTrip.error as any)?.response?.data as ApiError)?.error || (planTrip.error as any)?.message || 'An unexpected error occurred while calculating the route.'}
                 </p>
                 <Button variant="outline" onClick={() => planTrip.reset()} className="border-rose-500/30 hover:bg-rose-500/10 text-white">
                   Dismiss

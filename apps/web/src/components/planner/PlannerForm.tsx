@@ -12,7 +12,7 @@ const formSchema = z.object({
   pickup_location: z.string().min(2, 'Pickup location is required'),
   dropoff_location: z.string().min(2, 'Dropoff location is required'),
   current_cycle_used: z.coerce
-    .number({ invalid_type_error: 'Current cycle hours must be a number' })
+    .number({ invalid_type_error: 'Current cycle hours must be a number between 0 and 70' })
     .min(0, 'Current cycle hours must be at least 0')
     .max(70, 'Current cycle hours cannot exceed 70'),
 });
@@ -28,9 +28,9 @@ export default function PlannerForm({ onSubmit, isLoading }: PlannerFormProps) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      current_location: 'Chicago, IL',
-      pickup_location: 'Indianapolis, IN',
-      dropoff_location: 'Dallas, TX',
+      current_location: '',
+      pickup_location: '',
+      dropoff_location: '',
       current_cycle_used: 0,
     },
   });
