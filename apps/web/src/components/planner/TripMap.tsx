@@ -16,6 +16,21 @@ L.Icon.Default.mergeOptions({
   shadowUrl,
 });
 
+// Helper to safely extract [lat, lng] from stop objects regardless of schema format
+const getStopCoords = (stop: any): [number, number] => {
+  if (!stop) return [0, 0];
+  const lat = stop.coordinates?.lat ?? stop.location?.lat ?? stop.lat ?? 0;
+  const lng = stop.coordinates?.lng ?? stop.location?.lng ?? stop.lng ?? 0;
+  return [lat, lng];
+};
+
+const getStopLocationName = (stop: any): string => {
+  if (!stop) return '';
+  if (typeof stop.location === 'string') return stop.location;
+  if (typeof stop.name === 'string') return stop.name;
+  return 'Location Stop';
+};
+
 // Prominent Semi-Truck Icon Marker for Current Location
 const truckLocationIcon = L.divIcon({
   className: 'truck-current-location-marker',
@@ -100,8 +115,14 @@ function FitBounds({ stops }: { stops?: Stop[] }) {
 
   useEffect(() => {
     if (stops && stops.length > 0) {
-      const bounds = L.latLngBounds(stops.map(s => [s.coordinates.lat, s.coordinates.lng]));
-      map.fitBounds(bounds, { padding: [60, 60] });
+      const validCoords = stops
+        .map(getStopCoords)
+        .filter(([lat, lng]) => lat !== 0 || lng !== 0);
+
+      if (validCoords.length > 0) {
+        const bounds = L.latLngBounds(validCoords);
+        map.fitBounds(bounds, { padding: [60, 60] });
+      }
     }
   }, [stops, map]);
 
@@ -137,32 +158,41 @@ export default function TripMap({ stops = [], routeGeometry }: TripMapProps) {
           />
         )}
 
-        {stops.map((stop, i) => (
-          <Marker 
-            key={i} 
-            position={[stop.coordinates.lat, stop.coordinates.lng]}
-            icon={createStopIcon(stop.type)}
-          >
-            <Popup className="dark-popup">
-              <div className="p-1 font-sans">
-                <div className="font-extrabold text-sm mb-1 uppercase tracking-wide text-sky-400">
-                  {stop.type === 'current' ? '🚚 CURRENT TRUCK LOCATION' : `${stop.type} STOP`}
+        {stops.map((stop: any, i) => {
+          const coords = getStopCoords(stop);
+          const locName = getStopLocationName(stop);
+          const arrivalTime = stop.arrivalTime || stop.arrival_time;
+          const duration = stop.duration ?? 0;
+
+          if (coords[0] === 0 && coords[1] === 0) return null;
+
+          return (
+            <Marker 
+              key={i} 
+              position={coords}
+              icon={createStopIcon(stop.type)}
+            >
+              <Popup className="dark-popup">
+                <div className="p-1 font-sans">
+                  <div className="font-extrabold text-sm mb-1 uppercase tracking-wide text-sky-400">
+                    {stop.type === 'current' ? '🚚 CURRENT TRUCK LOCATION' : `${stop.type} STOP`}
+                  </div>
+                  <div className="text-xs font-semibold text-slate-200 mb-1">{locName}</div>
+                  {arrivalTime && (
+                    <div className="text-[11px] font-mono text-slate-400">
+                      Arrival: {new Date(arrivalTime).toLocaleString()}
+                    </div>
+                  )}
+                  {duration > 0 && (
+                    <div className="text-[11px] font-mono text-slate-400">
+                      Duration: {duration} hrs
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs font-semibold text-slate-200 mb-1">{stop.location}</div>
-                {stop.arrivalTime && (
-                  <div className="text-[11px] font-mono text-slate-400">
-                    Arrival: {new Date(stop.arrivalTime).toLocaleString()}
-                  </div>
-                )}
-                {stop.duration > 0 && (
-                  <div className="text-[11px] font-mono text-slate-400">
-                    Duration: {stop.duration} hrs
-                  </div>
-                )}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+              </Popup>
+            </Marker>
+          );
+        })}
 
         <FitBounds stops={stops} />
       </MapContainer>

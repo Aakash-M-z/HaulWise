@@ -1,24 +1,30 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { DailyLog, LogSegment } from '@haulwise/api-client-react';
+import type { DailyLog } from '@haulwise/api-client-react';
 import { format } from 'date-fns';
 import { Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DailyLogViewerProps {
-  logs: DailyLog[];
+  logs?: DailyLog[];
 }
 
 const statuses = [
-  { id: 'off_duty', label: 'Off Duty (1)', color: 'bg-muted-foreground' },
-  { id: 'sleeper_berth', label: 'Sleeper (2)', color: 'bg-purple-500' },
-  { id: 'driving', label: 'Driving (3)', color: 'bg-primary' },
-  { id: 'on_duty', label: 'On Duty (4)', color: 'bg-orange-500' },
+  { id: 'off_duty', aliases: ['off_duty', 'OFF_DUTY'], label: 'Off Duty (1)', color: 'bg-muted-foreground' },
+  { id: 'sleeper_berth', aliases: ['sleeper_berth', 'SLEEPER_BERTH'], label: 'Sleeper (2)', color: 'bg-purple-500' },
+  { id: 'driving', aliases: ['driving', 'DRIVING'], label: 'Driving (3)', color: 'bg-primary' },
+  { id: 'on_duty', aliases: ['on_duty', 'ON_DUTY', 'ON_DUTY_NOT_DRIVING'], label: 'On Duty (4)', color: 'bg-orange-500' },
 ];
 
-export default function DailyLogViewer({ logs }: DailyLogViewerProps) {
-  const [activeTab, setActiveTab] = useState(logs[0]?.date || '');
+const safeFormatLogDate = (dateStr?: string, dayNum?: number) => {
+  if (!dateStr) return `Day ${dayNum || 1}`;
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? dateStr : format(d, 'MMM d');
+};
+
+export default function DailyLogViewer({ logs = [] }: DailyLogViewerProps) {
+  const [activeTab, setActiveTab] = useState(logs[0]?.date || 'Day 1');
 
   if (!logs || logs.length === 0) return null;
 
@@ -36,29 +42,42 @@ export default function DailyLogViewer({ logs }: DailyLogViewerProps) {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start overflow-x-auto bg-black/20 border border-white/5 h-auto p-1 mb-6 no-scrollbar">
-          {logs.map((log) => (
-            <TabsTrigger 
-              key={log.date} 
-              value={log.date}
-              className="font-mono text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2"
-            >
-              Day {log.dayNumber}: {format(new Date(log.date), 'MMM d')}
-            </TabsTrigger>
-          ))}
+          {logs.map((log: any, i) => {
+            const dateVal = log.date || `Day ${log.dayNumber || log.day_number || i + 1}`;
+            const dayNum = log.dayNumber || log.day_number || i + 1;
+            return (
+              <TabsTrigger 
+                key={dateVal} 
+                value={dateVal}
+                className="font-mono text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2"
+              >
+                Day {dayNum}: {safeFormatLogDate(log.date, dayNum)}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
 
-        {logs.map((log) => (
-          <TabsContent key={log.date} value={log.date} className="mt-0">
-            <LogGrid log={log} />
-          </TabsContent>
-        ))}
+        {logs.map((log: any, i) => {
+          const dateVal = log.date || `Day ${log.dayNumber || log.day_number || i + 1}`;
+          return (
+            <TabsContent key={dateVal} value={dateVal} className="mt-0">
+              <LogGrid log={log} />
+            </TabsContent>
+          );
+        })}
       </Tabs>
     </div>
   );
 }
 
-function LogGrid({ log }: { log: DailyLog }) {
+function LogGrid({ log }: { log: any }) {
   const hours = Array.from({ length: 24 }, (_, i) => i);
+  const segments = log.segments || [];
+
+  const totalOffDuty = log.totalOffDuty ?? log.total_off_duty ?? 14.0;
+  const totalSleeper = log.totalSleeperBerth ?? log.total_sleeper_berth ?? 0.0;
+  const totalDriving = log.totalDriving ?? log.total_driving ?? log.total_drive_hours ?? 8.0;
+  const totalOnDuty = log.totalOnDuty ?? log.total_on_duty ?? 2.0;
 
   return (
     <motion.div
@@ -87,14 +106,14 @@ function LogGrid({ log }: { log: DailyLog }) {
               ))}
             </div>
 
-            {statuses.map((status, rowIndex) => {
-              const segments = log.segments.filter(s => s.status === status.id);
+            {statuses.map((status) => {
+              const statusSegments = segments.filter((s: any) => status.aliases.includes(s.status));
               
               let totalStr = '0.0';
-              if (status.id === 'off_duty') totalStr = log.totalOffDuty.toFixed(1);
-              if (status.id === 'sleeper_berth') totalStr = log.totalSleeperBerth.toFixed(1);
-              if (status.id === 'driving') totalStr = log.totalDriving.toFixed(1);
-              if (status.id === 'on_duty') totalStr = log.totalOnDuty.toFixed(1);
+              if (status.id === 'off_duty') totalStr = Number(totalOffDuty).toFixed(1);
+              if (status.id === 'sleeper_berth') totalStr = Number(totalSleeper).toFixed(1);
+              if (status.id === 'driving') totalStr = Number(totalDriving).toFixed(1);
+              if (status.id === 'on_duty') totalStr = Number(totalOnDuty).toFixed(1);
 
               return (
                 <div key={status.id} className="flex h-12 border-b border-white/10 relative group hover:bg-white/5 transition-colors">
@@ -103,19 +122,23 @@ function LogGrid({ log }: { log: DailyLog }) {
                   </div>
                   
                   <div className="flex-1 relative z-10 mx-px">
-                    {segments.map((seg, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          "absolute top-1/2 -translate-y-1/2 h-3 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] transition-all group-hover:h-4 group-hover:brightness-125",
-                          status.color
-                        )}
-                        style={{
-                          left: `${(seg.startHour / 24) * 100}%`,
-                          width: `${((seg.endHour - seg.startHour) / 24) * 100}%`
-                        }}
-                      />
-                    ))}
+                    {statusSegments.map((seg: any, i: number) => {
+                      const startH = seg.startHour ?? seg.start_hour ?? 0;
+                      const endH = seg.endHour ?? seg.end_hour ?? 0;
+                      return (
+                        <div
+                          key={i}
+                          className={cn(
+                            "absolute top-1/2 -translate-y-1/2 h-3 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] transition-all group-hover:h-4 group-hover:brightness-125",
+                            status.color
+                          )}
+                          style={{
+                            left: `${(startH / 24) * 100}%`,
+                            width: `${((endH - startH) / 24) * 100}%`
+                          }}
+                        />
+                      );
+                    })}
                   </div>
 
                   <div className="w-16 flex items-center justify-center font-mono text-xs font-bold border-l border-white/10 bg-black/40 z-10 text-primary">
@@ -124,8 +147,6 @@ function LogGrid({ log }: { log: DailyLog }) {
                 </div>
               );
             })}
-            
-            {/* Draw connecting vertical lines between segments if they are continuous - omitted for simplicity, bars are clear enough */}
           </div>
         </div>
       </div>
@@ -134,7 +155,7 @@ function LogGrid({ log }: { log: DailyLog }) {
         <div className="bg-white/5 rounded-lg p-4 border border-white/5">
           <h4 className="text-sm font-semibold mb-2">Remarks</h4>
           <ul className="space-y-1 list-disc list-inside pl-4">
-            {log.remarks.map((remark, i) => (
+            {log.remarks.map((remark: string, i: number) => (
               <li key={i} className="text-sm text-muted-foreground font-mono">{remark}</li>
             ))}
           </ul>

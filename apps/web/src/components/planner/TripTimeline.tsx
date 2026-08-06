@@ -5,10 +5,16 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
 interface TripTimelineProps {
-  stops: Stop[];
+  stops?: Stop[];
 }
 
-export default function TripTimeline({ stops }: TripTimelineProps) {
+const safeFormatDate = (dateStr?: string) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? '' : format(d, 'MMM d, HH:mm');
+};
+
+export default function TripTimeline({ stops = [] }: TripTimelineProps) {
   const getIcon = (type: string) => {
     switch (type) {
       case 'current': return Navigation;
@@ -43,9 +49,13 @@ export default function TripTimeline({ stops }: TripTimelineProps) {
       </h3>
 
       <div className="relative pl-6 border-l border-white/10 space-y-8">
-        {stops.map((stop, i) => {
+        {stops.map((stop: any, i) => {
           const Icon = getIcon(stop.type);
           const colorClass = getColor(stop.type);
+          const locName = typeof stop.location === 'string' ? stop.location : (stop.name || 'Stop');
+          const arrivalTime = stop.arrivalTime || stop.arrival_time;
+          const formattedArrival = safeFormatDate(arrivalTime);
+          const distFromStart = stop.distanceFromStart ?? stop.mileage;
           
           return (
             <motion.div
@@ -58,8 +68,8 @@ export default function TripTimeline({ stops }: TripTimelineProps) {
               {/* Timeline dot */}
               <div className={cn(
                 "absolute -left-[35px] top-0 w-6 h-6 rounded-full border-2 flex items-center justify-center bg-background",
-                colorClass.split(' ')[0], // text color for border
-                colorClass.split(' ')[2]  // border color
+                colorClass.split(' ')[0],
+                colorClass.split(' ')[2]
               )}>
                 <Icon className={cn("w-3 h-3", colorClass.split(' ')[0])} />
               </div>
@@ -70,19 +80,19 @@ export default function TripTimeline({ stops }: TripTimelineProps) {
                     <span className={cn("text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded", colorClass)}>
                       {stop.type}
                     </span>
-                    <span className="font-semibold">{stop.location}</span>
+                    <span className="font-semibold">{locName}</span>
                   </div>
-                  {stop.arrivalTime && (
+                  {formattedArrival && (
                     <div className="text-sm font-mono text-muted-foreground flex items-center gap-1">
                       <ClockIcon className="w-3 h-3" />
-                      {format(new Date(stop.arrivalTime), 'MMM d, HH:mm')}
+                      {formattedArrival}
                     </div>
                   )}
                 </div>
                 
                 <div className="flex items-center gap-4 text-sm text-muted-foreground font-mono mt-3">
-                  {stop.distanceFromStart != null && (
-                    <span>Mile {Math.round(stop.distanceFromStart)}</span>
+                  {distFromStart != null && (
+                    <span>Mile {Math.round(distFromStart)}</span>
                   )}
                   {stop.duration > 0 && (
                     <span className="flex items-center gap-1 text-primary">
