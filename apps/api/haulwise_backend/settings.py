@@ -8,14 +8,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
 # -------------------------------------------------------
-# Security - no insecure fallback in production
-# In production (Render), set these via environment vars.
+# Security & Host Configuration
 # -------------------------------------------------------
-SECRET_KEY = os.environ['SECRET_KEY']
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-haulwise-commercial-secret-key-2026'
+)
 
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# Allow all Render domain formats (.onrender.com) by default
+_allowed_hosts_str = os.environ.get(
+    'ALLOWED_HOSTS',
+    '.onrender.com,haulwise.onrender.com,haulwise-api.onrender.com,localhost,127.0.0.1,*'
+)
+ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_str.split(',') if h.strip()]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -82,21 +89,7 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOW_ALL_ORIGINS = False
-
-# Comma-separated list of allowed CORS origins (set in env for production)
-_cors_origins = os.environ.get(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173'
-)
-CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
-
-# Always allow Vercel preview URLs and the production frontend
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r'^https://.*\.vercel\.app$',
-    r'^https://haul-wise-web\.vercel\.app$',
-]
-
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
