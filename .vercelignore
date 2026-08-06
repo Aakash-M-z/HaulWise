@@ -1,0 +1,6 @@
+apps/api
+packages/db
+packages/api-spec
+packages/api-zod
+scripts/
+*.sqlite3
