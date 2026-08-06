@@ -3,7 +3,7 @@ services:
     name: haulwise-api
     runtime: python
     rootDir: apps/api
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && python manage.py migrate --noinput
     startCommand: gunicorn haulwise_backend.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: SECRET_KEY
