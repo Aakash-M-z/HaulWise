@@ -271,23 +271,23 @@ export default function GpsTrackerModel() {
               ))}
             </div>
 
-            {/* GPS Badge */}
+            {/* Coordinates Badge */}
             <div className="flex items-center gap-1.5 bg-black/90 border border-sky-400/40 px-2.5 py-1 rounded-sm text-xs font-mono text-sky-300 font-semibold shadow-inner">
               <Navigation className="w-3 h-3 text-sky-400" />
-              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">GPS:</span>
+              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Coords:</span>
               <span>{currentLat.toFixed(4)}°, {currentLng.toFixed(4)}°</span>
             </div>
           </div>
         </div>
 
-        {/* Telemetry Dashboards */}
+        {/* Commercial Route Dashboards */}
         <div className="flex flex-col gap-3">
           
           {/* Box 1: Vehicle Status */}
           <div className="bg-[#090d16] border border-sky-500/20 rounded-md p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
               <span className="text-xs font-mono uppercase tracking-wider text-sky-400 font-semibold flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5" /> Active Vehicle Telemetry
+                <Truck className="w-3.5 h-3.5" /> Commercial Route Preview
               </span>
               <span className="px-2 py-0.5 rounded-sm bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold uppercase">
                 ACTIVE
