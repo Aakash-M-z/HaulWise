@@ -6,18 +6,19 @@ from .models import Trip
 from .serializers import TripInputSerializer, TripSerializer
 from .services import calculate_trip_plan
 
-# In-memory trip store fallback if database is unavailable
 MEMORY_TRIPS = []
+
+@api_view(['GET'])
+def health_check(request):
+    return Response({"status": "ok", "service": "HaulWise Commercial Logistics API"}, status=status.HTTP_200_OK)
 
 @api_view(['GET', 'POST'])
 def trip_list_create(request):
     if request.method == 'POST':
-        # Step 2 requirement: Log incoming request data before validation
         print("[API] Incoming request.data:", request.data)
         
         serializer = TripInputSerializer(data=request.data)
         if not serializer.is_valid():
-            # Step 2 & Step 7 requirement: Print serializer errors & return structured error payload
             print("[API] Serializer validation errors:", serializer.errors)
             
             first_field = next(iter(serializer.errors))
@@ -35,11 +36,9 @@ def trip_list_create(request):
         dropoff_loc = data['dropoff_location']
         cycle_used = data.get('current_cycle_used', 0.0)
 
-        # Calculate HOS-compliant trip plan
         plan = calculate_trip_plan(current_loc, pickup_loc, dropoff_loc, cycle_used)
         trip_id = str(uuid.uuid4())
 
-        # Step 8 requirement: Return full plan structure with both nested trip_plan & top-level aliases
         response_data = {
             'id': trip_id,
             'current_location': current_loc,
@@ -47,7 +46,6 @@ def trip_list_create(request):
             'dropoff_location': dropoff_loc,
             'current_cycle_used': cycle_used,
             'trip_plan': plan,
-            # Top-level aliases matching Step 8 requirements & TripPlan schema
             'totalDistanceMiles': plan['totalDistanceMiles'],
             'totalDrivingHours': plan['totalDrivingHours'],
             'totalTripHours': plan['totalTripHours'],
@@ -59,7 +57,6 @@ def trip_list_create(request):
             'stops': plan['stops'],
             'dailyLogs': plan['dailyLogs'],
             'routeGeometry': plan['routeGeometry'],
-            # Additional convenient aliases for step 8
             'distance': plan['totalDistanceMiles'],
             'duration': plan['totalTripHours'],
             'fuelStops': plan['fuelStopCount'],
@@ -86,10 +83,11 @@ def trip_list_create(request):
 
     elif request.method == 'GET':
         try:
-            trips = Trip.objects.all()
+            trips = list(Trip.objects.all())
             serializer = TripSerializer(trips, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        except Exception:
+        except Exception as e:
+            print("[API] DB fetch error (falling back to memory):", e)
             return Response(MEMORY_TRIPS, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -98,9 +96,10 @@ def trip_detail(request, pk):
         trip = Trip.objects.get(pk=pk)
         serializer = TripSerializer(trip)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    except Exception:
+    except Exception as e:
+        print("[API] DB detail error (checking memory):", e)
         for t in MEMORY_TRIPS:
-            if t.get('id') == pk:
+            if t.get('id') == str(pk):
                 return Response(t, status=status.HTTP_200_OK)
         return Response({
             "success": False,
