@@ -1,13 +1,21 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-haulwise-commercial-logistics-secret-key')
+# Load .env file for local development
+load_dotenv(BASE_DIR / '.env')
 
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+# -------------------------------------------------------
+# Security - no insecure fallback in production
+# In production (Render), set these via environment vars.
+# -------------------------------------------------------
+SECRET_KEY = os.environ['SECRET_KEY']
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
