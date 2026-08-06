@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { 
-  Truck, 
-  Play, 
-  Pause, 
-  RotateCcw, 
-  Radio, 
-  Clock, 
-  MapPin, 
+import {
+  Truck,
+  Play,
+  Pause,
+  RotateCcw,
+  Radio,
+  Clock,
+  MapPin,
   Navigation
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -126,7 +126,7 @@ export default function GpsTrackerModel() {
     return () => clearInterval(interval);
   }, [isPlaying, speedMultiplier]);
 
-  // Derived telemetry metrics
+  // Calculated estimates based on planned route and HOS rules
   const simulatedSpeed = isPlaying ? Math.floor(62 + Math.sin(progress * 20) * 4) : 0;
   const distanceCovered = Math.floor(progress * 925);
   const totalDistance = 925;
@@ -137,7 +137,7 @@ export default function GpsTrackerModel() {
 
   return (
     <div className="w-full bg-[#080c14] border border-sky-500/20 rounded-md p-4 sm:p-6 shadow-2xl text-slate-100 font-sans">
-      
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 mb-4 border-b border-sky-950">
         <div className="flex items-center gap-3">
@@ -147,10 +147,10 @@ export default function GpsTrackerModel() {
           <div>
             <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-sky-400 font-semibold">
               <span className="w-2 h-2 rounded-sm bg-sky-400 animate-ping" />
-              Live Telemetry • GPS Model
+              Route Execution Preview
             </div>
             <h3 className="text-lg font-extrabold text-white uppercase tracking-wider font-sans">
-              Fleet GPS Simulator
+              Planned Trip Progress
             </h3>
           </div>
         </div>
@@ -164,11 +164,10 @@ export default function GpsTrackerModel() {
                 setSelectedVehicleIdx(idx);
                 setProgress(0.15);
               }}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase border transition-all ${
-                selectedVehicleIdx === idx
-                  ? 'bg-sky-950 border-sky-400 text-sky-200 shadow-sm shadow-sky-500/20'
-                  : 'bg-black/40 border-white/10 text-slate-400 hover:text-white'
-              }`}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold uppercase border transition-all ${selectedVehicleIdx === idx
+                ? 'bg-sky-950 border-sky-400 text-sky-200 shadow-sm shadow-sky-500/20'
+                : 'bg-black/40 border-white/10 text-slate-400 hover:text-white'
+                }`}
             >
               {v.id}
             </button>
@@ -178,7 +177,7 @@ export default function GpsTrackerModel() {
 
       {/* Main Grid: Interactive Map + Square Box Dashboards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-        
+
         {/* Map Panel (2 Cols) - Height matches right column perfectly */}
         <div className="lg:col-span-2 relative rounded-md overflow-hidden border border-sky-900/40 bg-black min-h-[380px] h-full flex flex-col justify-between shadow-inner">
           <div className="flex-1 w-full relative min-h-[320px]">
@@ -226,7 +225,7 @@ export default function GpsTrackerModel() {
                 <Popup>
                   <div className="p-1 font-sans text-xs">
                     <strong className="text-sky-400 block">{activeVehicle.name}</strong>
-                    <span>Speed: {simulatedSpeed} MPH</span>
+                    <span>Estimated Speed: {simulatedSpeed} MPH</span>
                   </div>
                 </Popup>
               </Marker>
@@ -242,7 +241,7 @@ export default function GpsTrackerModel() {
                 className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-sm h-7 px-3 text-xs border border-sky-300/40"
               >
                 {isPlaying ? <Pause className="w-3 h-3 mr-1" /> : <Play className="w-3 h-3 mr-1" />}
-                {isPlaying ? 'PAUSE' : 'SIMULATE'}
+                {isPlaying ? 'PAUSE' : 'PREVIEW'}
               </Button>
               <Button
                 size="sm"
@@ -260,11 +259,10 @@ export default function GpsTrackerModel() {
                 <button
                   key={multiplier}
                   onClick={() => setSpeedMultiplier(multiplier)}
-                  className={`px-2 py-0.5 rounded-sm border transition-all ${
-                    speedMultiplier === multiplier
-                      ? 'bg-sky-400 text-slate-950 border-sky-300 font-bold'
-                      : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
-                  }`}
+                  className={`px-2 py-0.5 rounded-sm border transition-all ${speedMultiplier === multiplier
+                    ? 'bg-sky-400 text-slate-950 border-sky-300 font-bold'
+                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    }`}
                 >
                   {multiplier}x
                 </button>
@@ -282,21 +280,21 @@ export default function GpsTrackerModel() {
 
         {/* Commercial Route Dashboards */}
         <div className="flex flex-col gap-3">
-          
+
           {/* Box 1: Vehicle Status */}
           <div className="bg-[#090d16] border border-sky-500/20 rounded-md p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
               <span className="text-xs font-mono uppercase tracking-wider text-sky-400 font-semibold flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5" /> Commercial Route Preview
+                <Truck className="w-3.5 h-3.5" /> Planned Route Metrics
               </span>
               <span className="px-2 py-0.5 rounded-sm bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold uppercase">
-                ACTIVE
+                IN PROGRESS
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-black/50 p-2.5 rounded-sm border border-white/[0.05]">
-                <span className="text-slate-400 block text-[10px] uppercase font-mono">Speed</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-mono">Estimated Avg Speed</span>
                 <span className="text-lg font-extrabold text-white font-mono flex items-baseline gap-1">
                   {simulatedSpeed} <span className="text-xs font-normal text-sky-400">MPH</span>
                 </span>
@@ -312,7 +310,7 @@ export default function GpsTrackerModel() {
 
             <div className="space-y-1">
               <div className="flex justify-between text-[11px] font-mono text-slate-300">
-                <span>Fuel Level:</span>
+                <span>Estimated Fuel Remaining:</span>
                 <span className="text-sky-300 font-bold">{fuelPercent}%</span>
               </div>
               <div className="w-full bg-slate-900 rounded-sm h-2 overflow-hidden border border-white/10">
@@ -325,7 +323,7 @@ export default function GpsTrackerModel() {
           <div className="bg-[#090d16] border border-sky-500/20 rounded-md p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
               <span className="text-xs font-mono uppercase tracking-wider text-sky-400 font-semibold flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5" /> FMCSA HOS Duty Clock
+                <Clock className="w-3.5 h-3.5" /> Estimated HOS Status
               </span>
               <span className="px-2 py-0.5 rounded-sm bg-sky-500/10 border border-sky-400/30 text-sky-300 text-[10px] font-mono font-bold uppercase">
                 COMPLIANT
@@ -334,12 +332,12 @@ export default function GpsTrackerModel() {
 
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-black/50 p-2.5 rounded-sm border border-white/[0.05]">
-                <span className="text-slate-400 block text-[10px] uppercase font-mono">Drive Time Left</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-mono">Drive Time Remaining</span>
                 <span className="text-base font-bold text-sky-200 font-mono">{driveHoursLeft} hrs</span>
               </div>
 
               <div className="bg-black/50 p-2.5 rounded-sm border border-white/[0.05]">
-                <span className="text-slate-400 block text-[10px] uppercase font-mono">Duty Window</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-mono">Remaining Duty Window</span>
                 <span className="text-base font-bold text-slate-200 font-mono">11.4 hrs</span>
               </div>
             </div>
@@ -349,7 +347,7 @@ export default function GpsTrackerModel() {
           <div className="bg-[#090d16] border border-sky-500/20 rounded-md p-4 flex-1 flex flex-col justify-between">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2">
               <span className="text-xs font-mono uppercase tracking-wider text-sky-400 font-semibold flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5" /> Waypoint Sequence
+                <MapPin className="w-3.5 h-3.5" /> Trip Progress
               </span>
             </div>
 
@@ -360,20 +358,19 @@ export default function GpsTrackerModel() {
                 return (
                   <div
                     key={idx}
-                    className={`flex items-center justify-between p-2 rounded-sm border transition-all ${
-                      isCurrent
-                        ? 'bg-sky-950/80 border-sky-400/50 text-sky-200'
-                        : isPassed
+                    className={`flex items-center justify-between p-2 rounded-sm border transition-all ${isCurrent
+                      ? 'bg-sky-950/80 border-sky-400/50 text-sky-200'
+                      : isPassed
                         ? 'bg-black/40 border-emerald-500/20 text-slate-300'
                         : 'bg-black/20 border-white/[0.04] text-slate-500'
-                    }`}
+                      }`}
                   >
                     <span className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-sm ${isPassed ? 'bg-emerald-400' : 'bg-slate-600'}`} />
                       {wp.name.split('(')[0]}
                     </span>
                     <span className="text-[10px] uppercase font-bold text-sky-400">
-                      {isPassed ? 'CLEARED' : 'PENDING'}
+                      {isPassed ? 'REACHED' : 'UPCOMING'}
                     </span>
                   </div>
                 );
