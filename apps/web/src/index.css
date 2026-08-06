@@ -1,0 +1,181 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover-border: hsl(var(--popover-border));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-border: var(--primary-border);
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-border: var(--secondary-border);
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-border: var(--muted-border);
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-border: var(--accent-border);
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-border: var(--destructive-border);
+
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --button-outline: rgba(255, 255, 255, 0.08);
+  --badge-outline: rgba(255, 255, 255, 0.08);
+  --elevate-1: rgba(255, 255, 255, 0.03);
+  --elevate-2: rgba(255, 255, 255, 0.07);
+
+  /* Modern Premium Obsidian Theme */
+  --background: 222 35% 6%;
+  --foreground: 210 40% 98%;
+
+  --border: 220 20% 14%;
+  --input: 220 20% 14%;
+  --ring: 199 95% 74%;
+
+  --card: 222 30% 9%;
+  --card-foreground: 210 40% 98%;
+  --card-border: 220 20% 14%;
+
+  --popover: 222 30% 9%;
+  --popover-foreground: 210 40% 98%;
+  --popover-border: 220 20% 14%;
+
+  --primary: 199 95% 74%;
+  --primary-foreground: 222 35% 6%;
+
+  --secondary: 220 20% 14%;
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 220 20% 12%;
+  --muted-foreground: 217 15% 65%;
+
+  --accent: 199 89% 48%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --radius: 0.5rem;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+}
+
+.dark {
+  --background: 222 35% 6%;
+  --foreground: 210 40% 98%;
+  --border: 220 20% 14%;
+  --input: 220 20% 14%;
+  --ring: 199 95% 74%;
+  --card: 222 30% 9%;
+  --card-foreground: 210 40% 98%;
+  --card-border: 220 20% 14%;
+  --popover: 222 30% 9%;
+  --popover-foreground: 210 40% 98%;
+  --popover-border: 220 20% 14%;
+  --primary: 199 95% 74%;
+  --primary-foreground: 222 35% 6%;
+  --secondary: 220 20% 14%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 220 20% 12%;
+  --muted-foreground: 217 15% 65%;
+  --accent: 199 89% 48%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body, #root {
+    min-height: 100%;
+    @apply font-sans antialiased text-foreground selection:bg-sky-500/20 selection:text-sky-300;
+    background-color: #06090e !important;
+    background-image: 
+      radial-gradient(rgba(255, 255, 255, 0.32) 1.2px, transparent 1.2px),
+      radial-gradient(at 50% 0%, rgba(56, 189, 248, 0.15) 0px, transparent 65%) !important;
+    background-size: 24px 24px, 100% 100% !important;
+    background-position: 0 0, 0 0 !important;
+    background-attachment: fixed !important;
+  }
+}
+
+.glass-card {
+  background: rgba(8, 13, 22, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-card-hover:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -10px rgba(56, 189, 248, 0.15);
+}
+
+.glow-subtle {
+  box-shadow: 0 0 40px -10px rgba(56, 189, 248, 0.25);
+}
+
+.leaflet-container {
+  background: hsl(var(--background)) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: var(--radius) !important;
+  backdrop-filter: blur(12px);
+}
+.leaflet-popup-tip {
+  background: hsl(var(--card)) !important;
+  border-top: 1px solid hsl(var(--border)) !important;
+  border-left: 1px solid hsl(var(--border)) !important;
+}
+
+@layer utilities {
+  input[type='search']::-webkit-search-cancel-button { @apply hidden; }
+}

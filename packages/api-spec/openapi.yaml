@@ -1,0 +1,313 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: HaulWise API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: trip
+    description: Trip planning operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /trip:
+    post:
+      operationId: planTrip
+      tags: [trip]
+      summary: Plan a truck trip
+      description: >
+        Accepts origin, pickup, and dropoff locations plus current cycle hours used.
+        Returns a fully computed HOS-compliant driving plan with fuel stops, rest stops,
+        ELD daily logs, and route geometry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TripInput"
+      responses:
+        "200":
+          description: Successful trip plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripPlan"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Geocoding or routing service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /trips:
+    get:
+      operationId: listTrips
+      tags: [trip]
+      summary: List recent trips
+      description: Returns up to 20 most recent saved trip plans.
+      responses:
+        "200":
+          description: List of trips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedTrip"
+
+  /trips/{id}:
+    get:
+      operationId: getTrip
+      tags: [trip]
+      summary: Get a saved trip
+      description: Returns the full trip plan for a previously saved trip.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Trip plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedTrip"
+        "404":
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    TripInput:
+      type: object
+      required:
+        - current_location
+        - pickup_location
+        - dropoff_location
+        - current_cycle_used
+      properties:
+        current_location:
+          type: string
+          description: Driver's current address or city
+          example: "Chicago, IL"
+        pickup_location:
+          type: string
+          description: Pickup address or city
+          example: "Detroit, MI"
+        dropoff_location:
+          type: string
+          description: Dropoff address or city
+          example: "New York, NY"
+        current_cycle_used:
+          type: number
+          description: Hours already used in the current 70-hour/8-day cycle
+          minimum: 0
+          maximum: 70
+          example: 25
+
+    Coordinates:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+
+    Stop:
+      type: object
+      required: [type, location, coordinates, arrivalTime, duration]
+      properties:
+        type:
+          type: string
+          enum: [current, pickup, dropoff, fuel, rest, break]
+        location:
+          type: string
+          description: Human-readable place name
+        coordinates:
+          $ref: "#/components/schemas/Coordinates"
+        arrivalTime:
+          type: string
+          description: ISO 8601 datetime
+        duration:
+          type: number
+          description: Duration at stop in hours
+        distanceFromStart:
+          type: ["number", "null"]
+          description: Miles from trip origin
+
+    LogSegment:
+      type: object
+      required: [startHour, endHour, status]
+      properties:
+        startHour:
+          type: number
+          description: Hour of day (0-24) when this segment starts
+        endHour:
+          type: number
+          description: Hour of day (0-24) when this segment ends
+        status:
+          type: string
+          enum: [off_duty, sleeper_berth, driving, on_duty]
+
+    DailyLog:
+      type: object
+      required: [date, dayNumber, segments, totalOffDuty, totalSleeperBerth, totalDriving, totalOnDuty, remarks]
+      properties:
+        date:
+          type: string
+          description: ISO 8601 date string (YYYY-MM-DD)
+        dayNumber:
+          type: number
+          description: 1-indexed day number within the trip
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogSegment"
+        totalOffDuty:
+          type: number
+          description: Total off-duty hours for the day
+        totalSleeperBerth:
+          type: number
+          description: Total sleeper berth hours for the day
+        totalDriving:
+          type: number
+          description: Total driving hours for the day
+        totalOnDuty:
+          type: number
+          description: Total on-duty (not driving) hours for the day
+        remarks:
+          type: array
+          items:
+            type: string
+          description: Notable events for the day's log
+
+    RouteGeometry:
+      type: object
+      required: [coordinates]
+      properties:
+        coordinates:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+          description: Array of [lng, lat] coordinate pairs forming the route polyline
+
+    TripPlan:
+      type: object
+      required:
+        - totalDistanceMiles
+        - totalDrivingHours
+        - totalTripHours
+        - estimatedArrival
+        - remainingCycleHours
+        - fuelStopCount
+        - restStopCount
+        - stops
+        - dailyLogs
+        - routeGeometry
+        - startTime
+      properties:
+        totalDistanceMiles:
+          type: number
+          description: Total route distance in miles
+        totalDrivingHours:
+          type: number
+          description: Total driving time in hours
+        totalTripHours:
+          type: number
+          description: Total elapsed trip time including stops
+        estimatedArrival:
+          type: string
+          description: ISO 8601 datetime of estimated arrival
+        startTime:
+          type: string
+          description: ISO 8601 datetime of trip start
+        remainingCycleHours:
+          type: number
+          description: Remaining hours in the 70-hr/8-day cycle after trip
+        fuelStopCount:
+          type: number
+        restStopCount:
+          type: number
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/Stop"
+        dailyLogs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyLog"
+        routeGeometry:
+          $ref: "#/components/schemas/RouteGeometry"
+
+    SavedTrip:
+      type: object
+      required:
+        - id
+        - createdAt
+        - currentLocation
+        - pickupLocation
+        - dropoffLocation
+        - currentCycleUsed
+        - plan
+      properties:
+        id:
+          type: number
+        createdAt:
+          type: string
+          description: ISO 8601 datetime
+        currentLocation:
+          type: string
+        pickupLocation:
+          type: string
+        dropoffLocation:
+          type: string
+        currentCycleUsed:
+          type: number
+        plan:
+          $ref: "#/components/schemas/TripPlan"
