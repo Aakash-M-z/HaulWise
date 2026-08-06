@@ -8,7 +8,6 @@ class TripInputSerializer(serializers.Serializer):
     current_cycle_used = serializers.FloatField(default=0.0, min_value=0.0, max_value=70.0)
 
     def to_internal_value(self, data):
-        # Normalize camelCase inputs to snake_case if sent by frontend
         if isinstance(data, dict):
             normalized = data.copy()
             if 'currentLocation' in normalized and 'current_location' not in normalized:
@@ -25,6 +24,17 @@ class TripInputSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 class TripSerializer(serializers.ModelSerializer):
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    currentLocation = serializers.CharField(source='current_location', read_only=True)
+    pickupLocation = serializers.CharField(source='pickup_location', read_only=True)
+    dropoffLocation = serializers.CharField(source='dropoff_location', read_only=True)
+    currentCycleUsed = serializers.FloatField(source='current_cycle_used', read_only=True)
+    plan = serializers.JSONField(source='trip_plan', read_only=True)
+
     class Meta:
         model = Trip
-        fields = ['id', 'current_location', 'pickup_location', 'dropoff_location', 'current_cycle_used', 'trip_plan', 'created_at']
+        fields = [
+            'id', 
+            'current_location', 'pickup_location', 'dropoff_location', 'current_cycle_used', 'trip_plan', 'created_at',
+            'currentLocation', 'pickupLocation', 'dropoffLocation', 'currentCycleUsed', 'plan', 'createdAt'
+        ]

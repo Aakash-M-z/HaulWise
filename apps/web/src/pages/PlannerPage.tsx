@@ -9,11 +9,13 @@ import { usePlanTrip } from '@haulwise/api-client-react';
 import type { TripInput, TripPlan, ApiError } from '@haulwise/api-client-react';
 import { AlertTriangle, Map, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function PlannerPage() {
   const [tripPlan, setTripPlan] = useState<TripPlan | null>(null);
   
   const planTrip = usePlanTrip();
+  const queryClient = useQueryClient();
   
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -25,6 +27,10 @@ export default function PlannerPage() {
         console.log('[Frontend] Trip Request Succeeded:', result);
         const plan: TripPlan = result.trip_plan || result;
         setTripPlan(plan);
+        
+        // Auto-refresh trip history query cache
+        queryClient.invalidateQueries();
+
         if (window.innerWidth < 1024 && resultsRef.current) {
           resultsRef.current.scrollIntoView({ behavior: 'smooth' });
         }

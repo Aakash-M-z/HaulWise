@@ -9,7 +9,17 @@ import TripsPage from '@/pages/TripsPage';
 import TripDetailPage from '@/pages/TripDetailPage';
 import Navbar from '@/components/layout/Navbar';
 
-const queryClient = new QueryClient();
+// Configure TanStack Query with automatic refetching on mount & window focus
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      staleTime: 5000,
+    },
+  },
+});
 
 function Router() {
   return (
