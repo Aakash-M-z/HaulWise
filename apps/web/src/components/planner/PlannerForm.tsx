@@ -44,6 +44,10 @@ export default function PlannerForm({ onSubmit, isLoading, initialValues }: Plan
     },
   });
 
+  const watchCycleUsed = form.watch('current_cycle_used');
+  const cycleVal = typeof watchCycleUsed === 'number' ? watchCycleUsed : (parseFloat(watchCycleUsed) || 0);
+  const initialRemaining = Math.max(0, 70 - cycleVal);
+
   const fillPreset = (preset: typeof PRESET_CORRIDORS[0]) => {
     form.setValue('current_location', preset.current, { shouldValidate: true });
     form.setValue('pickup_location', preset.pickup, { shouldValidate: true });
@@ -134,7 +138,14 @@ export default function PlannerForm({ onSubmit, isLoading, initialValues }: Plan
               name="current_cycle_used"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">Current Cycle Used (Hours)</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                      Current Cycle Used (Hours)
+                    </FormLabel>
+                    <span className="text-[11px] font-mono text-sky-400 font-bold bg-sky-950/60 px-2 py-0.5 rounded border border-sky-500/30">
+                      {initialRemaining.toFixed(1)}h Rem.
+                    </span>
+                  </div>
                   <FormControl>
                     <Input 
                       type="number" 
@@ -142,12 +153,12 @@ export default function PlannerForm({ onSubmit, isLoading, initialValues }: Plan
                       max={70}
                       step="0.1" 
                       placeholder="Enter current cycle hours (0–70)" 
-                      className="bg-slate-900/90 border-slate-800 focus-visible:ring-blue-500 h-11 text-sm rounded-xl" 
+                      className="bg-slate-900/90 border-slate-800 focus-visible:ring-blue-500 h-11 text-sm rounded-xl font-mono" 
                       {...field} 
                     />
                   </FormControl>
-                  <FormDescription className="text-xs text-slate-400">
-                    Enter the driver's current hours used in the 70-hour / 8-day cycle.
+                  <FormDescription className="text-xs text-slate-400 font-mono">
+                    70-hr / 8-day cycle status. Available before departure: <span className="text-sky-300 font-bold">{initialRemaining.toFixed(1)} hrs</span>
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

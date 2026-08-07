@@ -146,7 +146,7 @@ export default function PlannerPage() {
                   <TripTimeline stops={tripPlan.stops} />
                 </div>
                 <div className="xl:col-span-2 space-y-6">
-                  <DailyLogViewer logs={tripPlan.dailyLogs} />
+                  <DailyLogViewer logs={tripPlan.dailyLogs} stops={tripPlan.stops} />
                 </div>
               </div>
             </motion.div>

@@ -62,6 +62,8 @@ CITY_COORDINATES: Dict[str, Tuple[float, float]] = {
     'salt lake city': (40.7608, -111.8910),
     'las vegas, nv': (36.1699, -115.1398),
     'las vegas': (36.1699, -115.1398),
+    'orlando, fl': (28.5383, -81.3792),
+    'orlando': (28.5383, -81.3792),
 }
 
 
@@ -86,8 +88,8 @@ def geocode_location(query: str) -> Tuple[float, float]:
 
     # Deterministic hash fallback inside continental US bounds
     hash_val = sum(ord(c) for c in clean_query)
-    lat = 32.0 + (hash_val % 1200) / 100.0  # 32 – 44 N
-    lng = -120.0 + (hash_val % 2000) / 50.0  # -120 – -80 W
+    lat = 32.0 + (hash_val % 1200) / 100.0
+    lng = -120.0 + (hash_val % 2000) / 50.0
     return (lat, lng)
 
 
@@ -104,12 +106,6 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 def get_osrm_route(coords: List[Tuple[float, float]]) -> Dict[str, Any]:
-    """
-    Call the public OSRM demo server.
-    Returns distance_miles, duration_hours, and the full GeoJSON polyline
-    as a list of [lng, lat] pairs.
-    Falls back to straight-line haversine when OSRM is unreachable.
-    """
     try:
         coord_str = ";".join([f"{lon:.5f},{lat:.5f}" for lat, lon in coords])
         url = (
@@ -124,12 +120,11 @@ def get_osrm_route(coords: List[Tuple[float, float]]) -> Dict[str, Any]:
                 return {
                     'distance_miles': route['distance'] / 1609.344,
                     'duration_hours': route['duration'] / 3600.0,
-                    'geometry': route['geometry']['coordinates'],  # [[lng, lat], ...]
+                    'geometry': route['geometry']['coordinates'],
                 }
     except Exception:
         pass
 
-    # Haversine fallback – build a simple polyline between waypoints
     total_dist = sum(
         haversine_distance(coords[i][0], coords[i][1], coords[i+1][0], coords[i+1][1])
         for i in range(len(coords) - 1)
@@ -142,15 +137,7 @@ def get_osrm_route(coords: List[Tuple[float, float]]) -> Dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Polyline interpolation helpers
-# ---------------------------------------------------------------------------
-
 def _polyline_segment_distances(geometry: List[List[float]]) -> List[float]:
-    """
-    Return the cumulative distance (miles) from the polyline start to the
-    *end* of each segment.  geometry is a list of [lng, lat] pairs.
-    """
     cumulative = []
     running = 0.0
     for i in range(len(geometry) - 1):
@@ -166,12 +153,6 @@ def interpolate_point_on_polyline(
     cum_dists: List[float],
     target_miles: float,
 ) -> Optional[Tuple[float, float]]:
-    """
-    Walk the OSRM polyline until cumulative distance reaches *target_miles*.
-    Returns (lat, lng) at exactly that point by linear interpolation between
-    the two enclosing vertices.
-    Returns None if target_miles is beyond the polyline length.
-    """
     total_length = cum_dists[-1] if cum_dists else 0.0
     if target_miles >= total_length:
         return None
@@ -180,10 +161,7 @@ def interpolate_point_on_polyline(
     for i, dist in enumerate(cum_dists):
         if dist >= target_miles:
             seg_len = dist - prev_dist
-            if seg_len == 0:
-                frac = 0.0
-            else:
-                frac = (target_miles - prev_dist) / seg_len
+            frac = 0.0 if seg_len == 0 else (target_miles - prev_dist) / seg_len
             lng1, lat1 = geometry[i]
             lng2, lat2 = geometry[i + 1]
             lat = lat1 + frac * (lat2 - lat1)
@@ -194,19 +172,19 @@ def interpolate_point_on_polyline(
 
 
 # ---------------------------------------------------------------------------
-# Main trip-planning function
+# Constants according to FMCSA HOS regulations (Property Carrying Drivers)
 # ---------------------------------------------------------------------------
-
-FUEL_INTERVAL_MILES = 1000.0  # one fuel stop every 1 000 miles
-AVG_SPEED_MPH = 55.0          # commercial truck average
+FUEL_INTERVAL_MILES = 1000.0  # fuel stop every 1000 miles
+AVG_SPEED_MPH = 55.0          # commercial truck average speed
 MAX_DRIVING_PER_DAY = 11.0    # FMCSA 11-hour driving limit
 MAX_DUTY_HOURS = 14.0         # 14-hour on-duty window
-BREAK_AFTER_HOURS = 8.0       # mandatory 30-min break after 8 h continuous
+BREAK_AFTER_HOURS = 8.0       # mandatory 30-min break after 8 h continuous driving
 REST_DURATION = 10.0          # mandatory 10-hour sleeper/off-duty rest
 BREAK_DURATION = 0.5          # 30-minute HOS break
 FUEL_DURATION = 0.75          # 45-minute fuel stop
 PICKUP_DURATION = 1.0         # 1-hour pickup service
 DROPOFF_DURATION = 1.0        # 1-hour dropoff service
+TOTAL_CYCLE_HOURS = 70.0      # FMCSA 70-hour / 8-day cycle limit
 
 
 def calculate_trip_plan(
@@ -216,60 +194,47 @@ def calculate_trip_plan(
     current_cycle_used: float = 0.0,
 ) -> Dict[str, Any]:
 
-    # ── 1. Geocode all three waypoints ──────────────────────────────────────
+    # Validate current_cycle_used bounds
+    current_cycle_used = max(0.0, min(TOTAL_CYCLE_HOURS, float(current_cycle_used)))
+
+    # 1. Geocode locations
     c_lat, c_lng = geocode_location(current_loc)
     p_lat, p_lng = geocode_location(pickup_loc)
     d_lat, d_lng = geocode_location(dropoff_loc)
 
-    # ── 2. Get road route from OSRM ─────────────────────────────────────────
+    # 2. Get route geometry & distance
     route_res = get_osrm_route([(c_lat, c_lng), (p_lat, p_lng), (d_lat, d_lng)])
     total_miles: float = route_res['distance_miles']
-    geometry: List[List[float]] = route_res['geometry']  # [[lng, lat], ...]
+    geometry: List[List[float]] = route_res['geometry']
 
-    # Pre-compute cumulative distances along the full polyline once
     cum_dists = _polyline_segment_distances(geometry)
     polyline_total = cum_dists[-1] if cum_dists else total_miles
-
     driving_hours_total = total_miles / AVG_SPEED_MPH if total_miles > 0 else 0.0
 
     now = datetime.now(timezone.utc)
     start_iso = now.isoformat()
 
-    # ── 3. Determine real distance from start to pickup via the polyline ─────
-    # We use haversine from start→pickup as the "distance along route to pickup"
-    # (accurate enough; OSRM gives us the total distance, not per-leg breakdown)
     pickup_dist_road = haversine_distance(c_lat, c_lng, p_lat, p_lng)
-    # Scale to road distance: ratio of haversine vs haversine total
-    haversine_total = haversine_distance(c_lat, c_lng, d_lat, d_lng) + haversine_distance(c_lat, c_lng, p_lat, p_lng)
-    # Approximate pickup road distance proportionally to total road distance
-    if haversine_total > 0:
-        pickup_road_dist = (pickup_dist_road / haversine_total) * total_miles
-    else:
-        pickup_road_dist = 0.0
-    pickup_road_dist = min(pickup_road_dist, total_miles * 0.6)  # sanity cap
+    haversine_total = haversine_distance(c_lat, c_lng, d_lat, d_lng) + pickup_dist_road
+    pickup_road_dist = (pickup_dist_road / haversine_total * total_miles) if haversine_total > 0 else 0.0
+    pickup_road_dist = min(pickup_road_dist, total_miles * 0.6)
 
-    # ── 4. Pre-compute fuel stop positions from polyline ────────────────────
-    #
-    # Rule: insert one fuel stop at every 1 000-mile mark along the polyline.
-    # Skip any mark that falls before the pickup or at/beyond the dropoff.
-    #
     fuel_mile_marks: List[float] = []
     mark = FUEL_INTERVAL_MILES
-    while mark < polyline_total - 10:   # -10 mi buffer before dropoff
+    while mark < polyline_total - 10:
         fuel_mile_marks.append(mark)
         mark += FUEL_INTERVAL_MILES
 
-    fuel_stop_coords: List[Tuple[float, float, float]] = []  # (lat, lng, mile_mark)
+    fuel_stop_coords: List[Tuple[float, float, float]] = []
     for mile_mark in fuel_mile_marks:
         pt = interpolate_point_on_polyline(geometry, cum_dists, mile_mark)
         if pt:
             fuel_stop_coords.append((pt[0], pt[1], mile_mark))
 
-    # ── 5. Build stops list ──────────────────────────────────────────────────
     stops: List[Dict[str, Any]] = []
     daily_logs: List[Dict[str, Any]] = []
 
-    # ── 5a. Current location ─────────────────────────────────────────────────
+    # 1. Current Location Stop
     stops.append({
         'type': 'current',
         'location': current_loc,
@@ -279,49 +244,61 @@ def calculate_trip_plan(
         'distanceFromStart': 0.0,
     })
 
-    # ── 5b. Pickup ───────────────────────────────────────────────────────────
+    # 2. Pickup Stop
     pickup_drive_hrs = pickup_road_dist / AVG_SPEED_MPH
-    pickup_arr = (now + timedelta(hours=pickup_drive_hrs)).isoformat()
+    pickup_arr_dt = now + timedelta(hours=pickup_drive_hrs)
     stops.append({
         'type': 'pickup',
         'location': pickup_loc,
         'coordinates': {'lat': round(p_lat, 5), 'lng': round(p_lng, 5)},
-        'arrivalTime': pickup_arr,
+        'arrivalTime': pickup_arr_dt.isoformat(),
         'duration': PICKUP_DURATION,
         'distanceFromStart': round(pickup_road_dist, 1),
     })
 
-    # ── 6. HOS driving loop ──────────────────────────────────────────────────
-    # State machine tracking cumulative driving hours and distance
     accumulated_drive_hrs = pickup_drive_hrs + PICKUP_DURATION
     accumulated_miles = pickup_road_dist
-    current_time_hr = 8.0         # driver starts at 08:00 on day 1
-    current_day_drive_hrs = 0.0
-    continuous_drive_hrs = 0.0    # for mandatory 30-min break tracking
     day_num = 1
 
-    current_day_segments: List[Dict[str, Any]] = [{
-        'startHour': 8.0,
-        'endHour': 9.0,
-        'status': 'on_duty'       # pre-trip inspection at pickup
-    }]
+    current_day_segments: List[Dict[str, Any]] = [
+        {'startHour': 0.0, 'endHour': 8.0, 'status': 'off_duty'},
+        {'startHour': 8.0, 'endHour': 9.0, 'status': 'on_duty'}
+    ]
     current_time_hr = 9.0
+    current_day_drive_hrs = 0.0
+    continuous_drive_hrs = 0.0
 
     remaining_drive = driving_hours_total - pickup_drive_hrs
     if remaining_drive < 0:
         remaining_drive = driving_hours_total
 
-    fuel_idx = 0          # pointer into fuel_stop_coords
+    fuel_idx = 0
     fuel_count = 0
     rest_count = 0
     break_count = 0
 
-    # Advance past any fuel stops already behind the pickup
     while fuel_idx < len(fuel_stop_coords) and fuel_stop_coords[fuel_idx][2] <= pickup_road_dist:
         fuel_idx += 1
 
+    def finalize_day_log(day_number: int, segments_list: List[Dict[str, Any]], remarks_list: List[str]):
+        off_duty = sum(s['endHour'] - s['startHour'] for s in segments_list if s['status'] == 'off_duty')
+        sleeper = sum(s['endHour'] - s['startHour'] for s in segments_list if s['status'] == 'sleeper_berth')
+        driving = sum(s['endHour'] - s['startHour'] for s in segments_list if s['status'] == 'driving')
+        on_duty = sum(s['endHour'] - s['startHour'] for s in segments_list if s['status'] == 'on_duty')
+
+        day_date = (now + timedelta(days=day_number - 1)).strftime('%Y-%m-%d')
+        daily_logs.append({
+            'date': day_date,
+            'dayNumber': day_number,
+            'segments': segments_list,
+            'totalOffDuty': round(off_duty, 2),
+            'totalSleeperBerth': round(sleeper, 2),
+            'totalDriving': round(driving, 2),
+            'totalOnDuty': round(on_duty, 2),
+            'remarks': remarks_list
+        })
+
     while remaining_drive > 0.001:
-        # ── Determine what limits this drive chunk ───────────────────────────
         if fuel_idx < len(fuel_stop_coords):
             next_fuel_mile = fuel_stop_coords[fuel_idx][2]
             miles_to_fuel = max(0.0, next_fuel_mile - accumulated_miles)
@@ -332,95 +309,108 @@ def calculate_trip_plan(
         hrs_until_break = max(0.0, BREAK_AFTER_HOURS - continuous_drive_hrs)
         hrs_left_today = max(0.0, MAX_DRIVING_PER_DAY - current_day_drive_hrs)
 
-        # What stops this chunk?
         drive_chunk = min(remaining_drive, hrs_left_today, hrs_to_fuel, hrs_until_break)
 
-        # Identify the stopping reason using a small epsilon tolerance
         EPS = 1e-6
-        hit_fuel  = (fuel_idx < len(fuel_stop_coords) and abs(drive_chunk - hrs_to_fuel)  < EPS and remaining_drive - drive_chunk > EPS)
+        hit_fuel = (fuel_idx < len(fuel_stop_coords) and abs(drive_chunk - hrs_to_fuel) < EPS and remaining_drive - drive_chunk > EPS)
         hit_break = (not hit_fuel and abs(drive_chunk - hrs_until_break) < EPS and continuous_drive_hrs + drive_chunk >= BREAK_AFTER_HOURS - EPS and remaining_drive - drive_chunk > EPS)
-        hit_rest  = (not hit_fuel and not hit_break and hrs_left_today <= EPS)
+        hit_rest = (not hit_fuel and not hit_break and hrs_left_today <= EPS)
 
-        # ── 10-h rest: today's 11-h driving cap is exhausted ────────────────
         if hit_rest or (drive_chunk <= EPS and hrs_left_today <= EPS):
             rest_count += 1
             rest_pt = interpolate_point_on_polyline(geometry, cum_dists, accumulated_miles)
             rest_lat, rest_lng = rest_pt if rest_pt else (p_lat, p_lng)
 
+            arr_dt = now + timedelta(hours=accumulated_drive_hrs)
             stops.append({
                 'type': 'rest',
                 'location': f"Mandatory Rest Stop #{rest_count}",
                 'coordinates': {'lat': round(rest_lat, 5), 'lng': round(rest_lng, 5)},
-                'arrivalTime': (now + timedelta(hours=accumulated_drive_hrs)).isoformat(),
+                'arrivalTime': arr_dt.isoformat(),
                 'duration': REST_DURATION,
                 'distanceFromStart': round(accumulated_miles, 1),
             })
-            current_day_segments.append({'startHour': round(current_time_hr, 2), 'endHour': 24.0, 'status': 'off_duty'})
-            day_date = (now + timedelta(days=day_num - 1)).strftime('%Y-%m-%d')
-            daily_logs.append({
-                'date': day_date,
-                'dayNumber': day_num,
-                'segments': current_day_segments,
-                'totalOffDuty': round(max(0.0, 24.0 - current_day_drive_hrs - 1.0), 1),
-                'totalSleeperBerth': 0.0,
-                'totalDriving': round(current_day_drive_hrs, 1),
-                'totalOnDuty': 1.0,
-                'remarks': [f"Day {day_num}: drove {round(current_day_drive_hrs * AVG_SPEED_MPH, 0):.0f} mi — 10-hr rest"],
-            })
+
+            rest_today_hrs = min(REST_DURATION, 24.0 - current_time_hr)
+            rest_next_day_hrs = REST_DURATION - rest_today_hrs
+
+            if rest_today_hrs > 0:
+                current_day_segments.append({
+                    'startHour': round(current_time_hr, 2),
+                    'endHour': 24.0,
+                    'status': 'off_duty'
+                })
+
+            day_remarks = [
+                f"Day {day_num}: Drove {round(current_day_drive_hrs * AVG_SPEED_MPH, 0):.0f} miles",
+                f"Completed 11-hr driving limit at mile {round(accumulated_miles, 0):.0f}",
+                f"Mandatory 10-hr rest break initiated ({rest_today_hrs:.1f}h today, {rest_next_day_hrs:.1f}h tomorrow)"
+            ]
+            finalize_day_log(day_num, current_day_segments, day_remarks)
+
             day_num += 1
             accumulated_drive_hrs += REST_DURATION
-            current_time_hr = 6.0
             current_day_drive_hrs = 0.0
             continuous_drive_hrs = 0.0
+
             current_day_segments = []
+            if rest_next_day_hrs > 0:
+                current_day_segments.append({
+                    'startHour': 0.0,
+                    'endHour': round(rest_next_day_hrs, 2),
+                    'status': 'off_duty'
+                })
+                current_time_hr = rest_next_day_hrs
+            else:
+                current_time_hr = 0.0
+
             continue
 
-        # Safety guard against zero-chunk infinite loops
         if drive_chunk <= EPS:
             break
 
-        # ── Drive the chunk ──────────────────────────────────────────────────
         seg_start = current_time_hr
-        current_time_hr        += drive_chunk
-        current_day_drive_hrs  += drive_chunk
-        continuous_drive_hrs   += drive_chunk
-        accumulated_drive_hrs  += drive_chunk
-        chunk_miles             = drive_chunk * AVG_SPEED_MPH
-        accumulated_miles      += chunk_miles
-        remaining_drive        -= drive_chunk
+        current_time_hr += drive_chunk
+        current_day_drive_hrs += drive_chunk
+        continuous_drive_hrs += drive_chunk
+        accumulated_drive_hrs += drive_chunk
+        chunk_miles = drive_chunk * AVG_SPEED_MPH
+        accumulated_miles += chunk_miles
+        remaining_drive -= drive_chunk
 
         current_day_segments.append({
             'startHour': round(seg_start, 2),
-            'endHour':   round(current_time_hr, 2),
-            'status':    'driving',
+            'endHour': round(current_time_hr, 2),
+            'status': 'driving',
         })
 
-        # ── Fuel stop at the exact polyline coordinate ───────────────────────
         if hit_fuel:
             f_lat, f_lng, f_mile = fuel_stop_coords[fuel_idx]
-            fuel_idx  += 1
+            fuel_idx += 1
             fuel_count += 1
+            arr_dt = now + timedelta(hours=accumulated_drive_hrs)
+
             stops.append({
                 'type': 'fuel',
                 'location': f"Fuel Stop #{fuel_count} — Mile {round(f_mile, 0):.0f}",
                 'coordinates': {'lat': round(f_lat, 5), 'lng': round(f_lng, 5)},
-                'arrivalTime': (now + timedelta(hours=accumulated_drive_hrs)).isoformat(),
+                'arrivalTime': arr_dt.isoformat(),
                 'duration': FUEL_DURATION,
                 'distanceFromStart': round(f_mile, 1),
             })
             current_day_segments.append({
                 'startHour': round(current_time_hr, 2),
-                'endHour':   round(current_time_hr + FUEL_DURATION, 2),
-                'status':    'on_duty',
+                'endHour': round(current_time_hr + FUEL_DURATION, 2),
+                'status': 'on_duty',
             })
-            current_time_hr       += FUEL_DURATION
+            current_time_hr += FUEL_DURATION
             accumulated_drive_hrs += FUEL_DURATION
-            continuous_drive_hrs   = 0.0   # fuelling resets continuous-drive clock
-
-        # ── 30-min HOS break after 8 h continuous driving ───────────────────
-        elif hit_break:
-            break_count      += 1
             continuous_drive_hrs = 0.0
+
+        elif hit_break:
+            break_count += 1
+            continuous_drive_hrs = 0.0
+            arr_dt = now + timedelta(hours=accumulated_drive_hrs)
 
             brk_pt = interpolate_point_on_polyline(geometry, cum_dists, accumulated_miles)
             brk_lat, brk_lng = brk_pt if brk_pt else (p_lat + (d_lat - p_lat) * 0.5, p_lng + (d_lng - p_lng) * 0.5)
@@ -429,36 +419,36 @@ def calculate_trip_plan(
                 'type': 'break',
                 'location': f"30-Min HOS Break #{break_count}",
                 'coordinates': {'lat': round(brk_lat, 5), 'lng': round(brk_lng, 5)},
-                'arrivalTime': (now + timedelta(hours=accumulated_drive_hrs)).isoformat(),
+                'arrivalTime': arr_dt.isoformat(),
                 'duration': BREAK_DURATION,
                 'distanceFromStart': round(accumulated_miles, 1),
             })
             current_day_segments.append({
                 'startHour': round(current_time_hr, 2),
-                'endHour':   round(current_time_hr + BREAK_DURATION, 2),
-                'status':    'off_duty',
+                'endHour': round(current_time_hr + BREAK_DURATION, 2),
+                'status': 'off_duty',
             })
-            current_time_hr       += BREAK_DURATION
+            current_time_hr += BREAK_DURATION
             accumulated_drive_hrs += BREAK_DURATION
 
-    # ── 5c. Dropoff ──────────────────────────────────────────────────────────
-    dropoff_arr = (now + timedelta(hours=accumulated_drive_hrs)).isoformat()
+    # 3. Dropoff Stop
+    dropoff_arr_dt = now + timedelta(hours=accumulated_drive_hrs)
     stops.append({
         'type': 'dropoff',
         'location': dropoff_loc,
         'coordinates': {'lat': round(d_lat, 5), 'lng': round(d_lng, 5)},
-        'arrivalTime': dropoff_arr,
+        'arrivalTime': dropoff_arr_dt.isoformat(),
         'duration': DROPOFF_DURATION,
         'distanceFromStart': round(total_miles, 1),
     })
 
-    # Close out the final day's log ──────────────────────────────────────────
     current_day_segments.append({
         'startHour': round(current_time_hr, 2),
         'endHour': round(current_time_hr + DROPOFF_DURATION, 2),
         'status': 'on_duty'
     })
     current_time_hr += DROPOFF_DURATION
+
     if current_time_hr < 24.0:
         current_day_segments.append({
             'startHour': round(current_time_hr, 2),
@@ -466,19 +456,15 @@ def calculate_trip_plan(
             'status': 'off_duty'
         })
 
-    day_date = (now + timedelta(days=day_num - 1)).strftime('%Y-%m-%d')
-    daily_logs.append({
-        'date': day_date,
-        'dayNumber': day_num,
-        'segments': current_day_segments,
-        'totalOffDuty': round(max(0.0, 24.0 - current_day_drive_hrs - DROPOFF_DURATION), 1),
-        'totalSleeperBerth': 0.0,
-        'totalDriving': round(current_day_drive_hrs, 1),
-        'totalOnDuty': round(DROPOFF_DURATION, 1),
-        'remarks': [f"Trip completed at {dropoff_loc}"],
-    })
+    final_remarks = [
+        f"Trip completed at {dropoff_loc}",
+        f"Final delivery completed. Total trip distance: {round(total_miles, 1)} miles"
+    ]
+    finalize_day_log(day_num, current_day_segments, final_remarks)
 
-    # ── 7. Final totals ──────────────────────────────────────────────────────
+    # ---------------------------------------------------------------------------
+    # Dynamic 70-Hour / 8-Day Cycle Hours Calculations
+    # ---------------------------------------------------------------------------
     total_stop_hours = (
         fuel_count * FUEL_DURATION
         + rest_count * REST_DURATION
@@ -487,15 +473,42 @@ def calculate_trip_plan(
         + DROPOFF_DURATION
     )
     total_trip_hours = driving_hours_total + total_stop_hours
-    cycle_remaining = max(0.0, 70.0 - (current_cycle_used + total_trip_hours))
+
+    # On-duty hours that consume the 70-hour cycle (Driving + On-Duty stops)
+    total_duty_hours = driving_hours_total + PICKUP_DURATION + DROPOFF_DURATION + (fuel_count * FUEL_DURATION)
+
+    # Initial remaining cycle hours before departure
+    initial_remaining_cycle = max(0.0, TOTAL_CYCLE_HOURS - current_cycle_used)
+
+    # Remaining cycle hours after completing the trip
+    cycle_remaining = max(0.0, TOTAL_CYCLE_HOURS - (current_cycle_used + total_duty_hours))
+
+    # Insufficient cycle detection
+    is_insufficient = (current_cycle_used + total_duty_hours) > TOTAL_CYCLE_HOURS
+
+    warning_msg = ""
+    if is_insufficient:
+        exceeded_by = round((current_cycle_used + total_duty_hours) - TOTAL_CYCLE_HOURS, 1)
+        warning_msg = (
+            f"FMCSA HOS Warning: Driver has {round(initial_remaining_cycle, 1)}h remaining in 70-hr cycle, "
+            f"but trip requires {round(total_duty_hours, 1)}h of on-duty time. Insufficient by {exceeded_by}h. "
+            f"Mandatory 34-hour HOS cycle restart required before departure."
+        )
+        if daily_logs:
+            daily_logs[0]['remarks'].insert(0, f"⚠️ FMCSA HOS ALERT: Initial remaining cycle ({round(initial_remaining_cycle, 1)}h) is insufficient for {round(total_duty_hours, 1)}h duty trip. 34-hr restart required.")
 
     return {
         'totalDistanceMiles': round(total_miles, 1),
         'totalDrivingHours': round(driving_hours_total, 1),
         'totalTripHours': round(total_trip_hours, 1),
-        'estimatedArrival': dropoff_arr,
-        'startTime': start_iso,
+        'totalDutyHours': round(total_duty_hours, 1),
+        'currentCycleUsed': round(current_cycle_used, 1),
+        'initialRemainingCycleHours': round(initial_remaining_cycle, 1),
         'remainingCycleHours': round(cycle_remaining, 1),
+        'isCycleInsufficient': is_insufficient,
+        'cycleWarningMessage': warning_msg,
+        'estimatedArrival': dropoff_arr_dt.isoformat(),
+        'startTime': start_iso,
         'fuelStopCount': fuel_count,
         'restStopCount': rest_count,
         'stops': stops,

@@ -111,7 +111,7 @@ export default function TripDetailPage() {
               <TripTimeline stops={plan.stops} />
             </div>
             <div className="xl:col-span-2 space-y-6">
-              <DailyLogViewer logs={plan.dailyLogs} />
+              <DailyLogViewer logs={plan.dailyLogs} stops={plan.stops} />
             </div>
           </div>
         </motion.div>
