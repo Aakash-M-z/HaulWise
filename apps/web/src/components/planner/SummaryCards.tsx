@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Route, Clock, Zap, Fuel, Coffee, Calendar, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Route, Clock, Zap, Fuel, Coffee, Calendar, AlertTriangle, ShieldCheck, ArrowRight } from 'lucide-react';
 import type { TripPlan } from '@haulwise/api-client-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
@@ -41,9 +41,9 @@ interface SummaryCardsProps {
 }
 
 export default function SummaryCards({ plan }: SummaryCardsProps) {
-  const currentCycleUsed = plan.currentCycleUsed ?? 0;
-  const initialRemainingCycle = plan.initialRemainingCycleHours ?? Math.max(0, 70 - currentCycleUsed);
-  const remainingCycleAfterTrip = plan.remainingCycleHours ?? 0;
+  const currentCycleUsed = plan.currentCycleUsed ?? (plan as any).current_cycle_used ?? 0;
+  const initialRemainingCycle = plan.initialRemainingCycleHours ?? (plan as any).initialRemainingCycleHours ?? Math.max(0, 70 - currentCycleUsed);
+  const remainingCycleAfterTrip = plan.remainingCycleHours ?? (plan as any).remainingCycleHours ?? 0;
   const isInsufficient = plan.isCycleInsufficient ?? (remainingCycleAfterTrip <= 0 && plan.totalDrivingHours > initialRemainingCycle);
   const warningMsg = plan.cycleWarningMessage || `FMCSA HOS Warning: Driver has ${initialRemainingCycle.toFixed(1)}h remaining in 70-hr cycle, but trip requires on-duty time exceeding available hours. 34-hour cycle restart required.`;
 
@@ -123,15 +123,19 @@ export default function SummaryCards({ plan }: SummaryCardsProps) {
         </motion.div>
       )}
 
-      {/* Cycle Compliant Badge */}
+      {/* Cycle Compliant Badge (Clean Unicode Arrow, No raw LaTeX) */}
       {!isInsufficient && (
-        <div className="px-4 py-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-mono flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>70-Hour / 8-Day Cycle Status: <strong>COMPLIANT</strong></span>
+        <div className="px-4 py-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-mono flex flex-wrap items-center justify-between gap-2 shadow-sm">
+          <div className="flex items-center gap-2 font-bold">
+            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>70-Hour / 8-Day Cycle Status: <span className="text-emerald-400 uppercase font-extrabold">Compliant</span></span>
           </div>
-          <div>
-            Used: <strong>{currentCycleUsed}h</strong> | Available: <strong>{initialRemainingCycle.toFixed(1)}h</strong> $\rightarrow$ End: <strong>{remainingCycleAfterTrip.toFixed(1)}h</strong>
+          <div className="flex items-center gap-1.5 text-slate-300">
+            <span>Used: <strong className="text-white">{currentCycleUsed}h</strong></span>
+            <span className="opacity-40">|</span>
+            <span>Available: <strong className="text-sky-300">{initialRemainingCycle.toFixed(1)}h</strong></span>
+            <ArrowRight className="w-3.5 h-3.5 text-emerald-400 inline mx-0.5" />
+            <span>End Cycle: <strong className="text-emerald-300">{remainingCycleAfterTrip.toFixed(1)}h</strong></span>
           </div>
         </div>
       )}

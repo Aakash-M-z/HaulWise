@@ -13,7 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 /**
  * Reads URL query params ?current=...&pickup=...&dropoff=...&cycle=...
- * so the Landing Page preset corridors can pre-fill the form.
+ * so Landing Page or History Re-Plan buttons can pre-fill the form.
  */
 function useUrlSearchParams() {
   const params = new URLSearchParams(window.location.search);
@@ -26,29 +26,51 @@ function useUrlSearchParams() {
 }
 
 export default function PlannerPage() {
-  const initialValues = useUrlSearchParams();
+  const urlSearchParams = useUrlSearchParams();
+  const [lastSubmittedValues, setLastSubmittedValues] = useState<Partial<TripInput> | null>(null);
   const [tripPlan, setTripPlan] = useState<TripPlan | null>(null);
+  const [planKey, setPlanKey] = useState<number>(0);
   const [showSidebar, setShowSidebar] = useState(true);
 
   const planTrip = usePlanTrip();
   const queryClient = useQueryClient();
-
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Active form values: prefers lastSubmittedValues over URL search params
+  const activeFormValues = {
+    current_location: lastSubmittedValues?.current_location || urlSearchParams.current_location,
+    pickup_location: lastSubmittedValues?.pickup_location || urlSearchParams.pickup_location,
+    dropoff_location: lastSubmittedValues?.dropoff_location || urlSearchParams.dropoff_location,
+    current_cycle_used: lastSubmittedValues?.current_cycle_used ?? urlSearchParams.current_cycle_used,
+  };
 
   const handleSubmit = (data: TripInput) => {
     console.log('[Frontend] Submitting Trip Request Payload:', JSON.stringify(data, null, 2));
+    setLastSubmittedValues(data);
 
     planTrip.mutate({ data }, {
       onSuccess: (result: any) => {
         console.log('[Frontend] Trip Request Succeeded:', result);
-        const plan: TripPlan = result.trip_plan || result;
+        
+        // Merge top-level and inner plan properties so SummaryCards gets all cycle info
+        const plan: any = {
+          ...(result.trip_plan || result),
+          currentCycleUsed: data.current_cycle_used,
+          initialRemainingCycleHours: result.initialRemainingCycleHours ?? Math.max(0, 70 - data.current_cycle_used),
+          remainingCycleHours: result.remainingCycleHours ?? (result.trip_plan?.remainingCycleHours),
+          totalDutyHours: result.totalDutyHours ?? (result.trip_plan?.totalDutyHours),
+          isCycleInsufficient: result.isCycleInsufficient ?? (result.trip_plan?.isCycleInsufficient),
+          cycleWarningMessage: result.cycleWarningMessage ?? (result.trip_plan?.cycleWarningMessage),
+        };
+
         setTripPlan(plan);
-        setShowSidebar(false); // Hide sidebar after successful trip generation
+        setPlanKey(prev => prev + 1); // Force fresh render of map & components
+        setShowSidebar(false);
 
         // Auto-refresh trip history query cache
         queryClient.invalidateQueries();
 
-        if (window.innerWidth < 1024 && resultsRef.current) {
+        if (resultsRef.current) {
           resultsRef.current.scrollIntoView({ behavior: 'smooth' });
         }
       },
@@ -60,13 +82,14 @@ export default function PlannerPage() {
 
   return (
     <div className="flex-1 flex flex-col lg:flex-row min-h-[calc(100vh-4rem)] bg-[#0a0e17]">
-      {/* Sidebar Form - Hidden after trip generation */}
+      {/* Sidebar Form */}
       {showSidebar && (
         <div className="w-full lg:w-[380px] shrink-0 z-20 shadow-2xl lg:h-[calc(100vh-4rem)] lg:overflow-y-auto">
           <PlannerForm
+            key={JSON.stringify(activeFormValues)}
             onSubmit={handleSubmit}
             isLoading={planTrip.isPending}
-            initialValues={initialValues}
+            initialValues={activeFormValues}
           />
         </div>
       )}
@@ -74,7 +97,7 @@ export default function PlannerPage() {
       {/* Main Content Area */}
       <div className="flex-1 min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] overflow-y-auto bg-[#0a0e17] relative p-4 md:p-6 pb-32" ref={resultsRef}>
 
-        {/* Floating Button to Show Sidebar */}
+        {/* Floating Button to Toggle Sidebar */}
         {!showSidebar && (
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -83,11 +106,11 @@ export default function PlannerPage() {
           >
             <Button
               onClick={() => setShowSidebar(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-2xl"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-2xl border border-sky-400/40"
               size="lg"
             >
               <SlidersHorizontal className="w-5 h-5 mr-2" />
-              Show Trip Parameters
+              Modify Trip Parameters
             </Button>
           </motion.div>
         )}
@@ -130,7 +153,7 @@ export default function PlannerPage() {
             </motion.div>
           ) : tripPlan ? (
             <motion.div
-              key="results"
+              key={`results-${planKey}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="space-y-6 max-w-7xl mx-auto pb-24"

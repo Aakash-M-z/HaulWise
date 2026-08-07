@@ -1,12 +1,13 @@
 import { useParams, Link } from 'wouter';
 import { useGetTrip } from '@haulwise/api-client-react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Calendar } from 'lucide-react';
+import { ArrowLeft, Loader2, Calendar, Edit3 } from 'lucide-react';
 import TripMap from '@/components/planner/TripMap';
 import SummaryCards from '@/components/planner/SummaryCards';
 import TripTimeline from '@/components/planner/TripTimeline';
 import DailyLogViewer from '@/components/planner/DailyLogViewer';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
 
 const safeFormatDate = (dateStr?: string) => {
   if (!dateStr) return format(new Date(), 'MMMM d, yyyy - HH:mm');
@@ -16,7 +17,6 @@ const safeFormatDate = (dateStr?: string) => {
 
 export default function TripDetailPage() {
   const params = useParams();
-  // Support both numeric IDs and string UUIDs
   const rawId = params.id || '';
   const tripIdParam = /^\d+$/.test(rawId) ? parseInt(rawId, 10) : (rawId as any);
 
@@ -54,6 +54,8 @@ export default function TripDetailPage() {
   const cycleUsed = trip.currentCycleUsed ?? trip.current_cycle_used ?? 0;
   const plan = trip.plan || trip.trip_plan || {};
 
+  const rePlanUrl = `/planner?current=${encodeURIComponent(currentLoc)}&pickup=${encodeURIComponent(pickupLoc)}&dropoff=${encodeURIComponent(dropoffLoc)}&cycle=${cycleUsed}`;
+
   return (
     <div className="flex-1 overflow-y-auto bg-black relative">
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] pointer-events-none" />
@@ -78,6 +80,13 @@ export default function TripDetailPage() {
               <span>{cycleUsed} hrs cycle used</span>
             </div>
           </div>
+
+          <Link href={rePlanUrl}>
+            <Button className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold font-mono text-sm gap-2 shadow-lg">
+              <Edit3 className="w-4 h-4" />
+              Update / Re-Plan Trip
+            </Button>
+          </Link>
         </motion.div>
 
         <motion.div
