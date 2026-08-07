@@ -17,12 +17,18 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-# Allow all Render domain formats (.onrender.com) by default
+# Allow all Render domain formats (.onrender.com) and localhost
 _allowed_hosts_str = os.environ.get(
     'ALLOWED_HOSTS',
     '.onrender.com,haulwise.onrender.com,haulwise-api.onrender.com,localhost,127.0.0.1,*'
 )
 ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_str.split(',') if h.strip()]
+
+# Reverse proxy SSL termination setting for Render
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Disable automatic trailing slash redirect to prevent CORS preflight 301 redirects
+APPEND_SLASH = False
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -89,8 +95,32 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# -------------------------------------------------------
+# CORS Configuration for Vercel <-> Render
+# -------------------------------------------------------
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = False
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
