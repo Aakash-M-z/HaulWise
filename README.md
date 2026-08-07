@@ -4,7 +4,7 @@
 
 ---
 
-## 🌟 Executive Overview
+##  Executive Overview
 
 **HaulWise** is a full-stack commercial freight routing and Electronic Logging Device (ELD) log management platform built to meet the rigorous demands of property-carrying commercial drivers and fleet dispatchers. 
 
@@ -12,7 +12,7 @@ By integrating real-time Open Source Routing Machine (OSRM) road geometry with F
 
 ---
 
-## ✨ Key Features & Technical Capabilities
+##  Key Features & Technical Capabilities
 
 ### 1. Required Inputs & Interactive Parameter Sidebar
 - **Current Location**: Driver origin or starting freight depot.
@@ -51,7 +51,7 @@ By integrating real-time Open Source Routing Machine (OSRM) road geometry with F
 
 ---
 
-## 🏗️ Architecture & Workspace Tech Stack
+## Architecture & Workspace Tech Stack
 
 HaulWise is structured as a modern TypeScript + Python monorepo using `pnpm` workspaces.
 
@@ -81,7 +81,7 @@ HaulWise/
 
 ---
 
-## 🚀 Getting Started & Local Development
+## Getting Started & Local Development
 
 ### Prerequisites
 - **Node.js**: `v20.0.0` or higher
@@ -166,15 +166,15 @@ venv\Scripts\python.exe manage.py check
 
 ---
 
-## 🔮 Future Roadmap & Enhancements
+## Future Roadmap & Enhancements
 
 Looking ahead, HaulWise is designed to expand into a complete fleet-grade telematics ecosystem. Key planned enhancements include:
 
-### 1. 📡 Live Telematics & OBD-II GPS Dongle Sync
+### 1.  Live Telematics & OBD-II GPS Dongle Sync
 - **Real-Time Duty Status Transitions**: Connect with vehicle CAN bus / OBD-II dongles via Bluetooth/Cellular to automatically transition driver status between `DRIVING` and `ON_DUTY` based on real-time vehicle movement.
 - **Geofenced Cargo Tracking**: Automated trigger of pickup/dropoff service timers upon crossing warehouse geofences.
 
-### 2. ⛈️ Real-Time Weather & Live Severe Weather Routing
+### 2.  Real-Time Weather & Live Severe Weather Routing
 - **NOAA Weather Overlays**: Layer live radar, snowstorm alerts, high-wind warnings, and road closure alerts directly on the interactive Leaflet route map.
 - **Dynamic Speed Adaptation**: Adjust average commercial travel speeds automatically when adverse weather conditions are detected along the highway corridor.
 
@@ -183,17 +183,17 @@ Looking ahead, HaulWise is designed to expand into a complete fleet-grade telema
 - **Bridge Clearance & Weight Restriction Avoidance**: Filter highway segments based on gross vehicle weight rating (GVWR), axle weight limits, and vertical bridge clearances.
 - **Hazardous Materials (HAZMAT) Class Routing**: Specialized routing rules avoiding tunnels and restricted urban bypasses for dangerous goods transport.
 
-### 4. 👥 Co-Driver Team Driving Mode
+### 4. Co-Driver Team Driving Mode
 - **Alternating Sleeper Berth Shifts**: Support 2-driver team configurations under FMCSA §395.1(g) rules, allowing non-stop long-haul transit while one driver rests in the sleeper berth while the other drives.
 
-### 5. ⛽ Fuel Price Optimization Engine
+### 5.  Fuel Price Optimization Engine
 - **Live Diesel Price Integration**: Integrate real-time truck stop diesel fuel pricing APIs (e.g. Pilot Flying J, Love's, TA Petro) to recommend specific fuel stops that minimize total trip fuel expense.
 
-### 6. 📄 Official PDF Export & FMCSA Form 395.8 Printing
+### 6.  Official PDF Export & FMCSA Form 395.8 Printing
 - **Paper-Equivalent Log Generation**: One-click export of high-resolution PDF daily log sheets matching the official FMCSA Form 395.8 layout for DOT roadside inspections.
 
 ---
 
-## 📄 License
+##  License
 
 This project is submitted for commercial logistics assessment and hiring review. All rights reserved.
